@@ -59,6 +59,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -173,17 +174,15 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 
 	@Test
 	void receivesMessageVisibilityTimeout() throws Exception {
-		String payload = "receivesMessage-payload";
-		long now = System.currentTimeMillis(); // agora
-		// produtor -> Message -> sdk aws -> payload -> sqs
-		// sqs -> sdk aws -> Message source -> Message -> consumer
-		Message<String> message = MessageBuilder.withPayload(payload).build();
-		Long futureTimestamp = message.getHeaders().getTimestamp(); //futureTimestamp
-		sqsTemplate.send(SUCCESS_RECEIVES_MESSAGE_DEFAULT_ERROR_HANDLER_QUEUE_NAME, message);
-		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_RECEIVES_MESSAGE_DEFAULT_ERROR_HANDLER_QUEUE_NAME, message);
-		assertThat(latchContainer.receivesMessageLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		int payload = 1;
+		sqsTemplate.send(SUCCESS_RECEIVES_MESSAGE_DEFAULT_ERROR_HANDLER_QUEUE_NAME, payload);
+		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_RECEIVES_MESSAGE_DEFAULT_ERROR_HANDLER_QUEUE_NAME, payload);
+		assertThat(latchContainer.failedErrorLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(latchContainer.retryErrorHandler.await(15, TimeUnit.SECONDS)).isTrue();
+		assertThat(latchContainer.successErrorLatch.await(15, TimeUnit.SECONDS)).isTrue();
 		assertThat(latchContainer.invocableHandlerMethodLatch.await(10, TimeUnit.SECONDS)).isTrue();
 		assertThat(latchContainer.acknowledgementCallbackSuccessLatch.await(10, TimeUnit.SECONDS)).isTrue();
+
 	}
 
 	@Test
@@ -437,8 +436,16 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 			id = "visibilityErrHandler")
 		CompletableFuture<Void> listen(Message<String> message, @Header(SqsHeaders.SQS_QUEUE_NAME_HEADER) String queueName) {
 			logger.info("Received message {} from queue {}", message, queueName);
-			latchContainer.receivesMessageLatch.countDown();
-			return CompletableFutures.failedFuture(new RuntimeException("Expected exception from does-not-ack-async"));
+			if (message.getHeaders().get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT).equals("1")) {
+				latchContainer.failedErrorLatch.countDown();
+				latchContainer.successErrorLatch.countDown();
+				return CompletableFutures.failedFuture(new RuntimeException("Expected exception from does-not-ack-async"));
+			}
+
+			latchContainer.successErrorLatch.countDown();
+			latchContainer.retryErrorHandler.countDown();
+
+			return CompletableFuture.completedFuture(null);
 		}
 	}
 
@@ -537,6 +544,9 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 		final CountDownLatch acknowledgementCallbackBatchLatch = new CountDownLatch(1);
 		final CountDownLatch acknowledgementCallbackErrorLatch = new CountDownLatch(1);
 		final CountDownLatch manuallyInactiveCreatedContainerLatch = new CountDownLatch(1);
+		final CountDownLatch retryErrorHandler = new CountDownLatch(1);
+		final CountDownLatch failedErrorLatch = new CountDownLatch(1);
+		final CountDownLatch successErrorLatch = new CountDownLatch(2);
 		final CyclicBarrier maxConcurrentMessagesBarrier = new CyclicBarrier(21);
 
 	}
