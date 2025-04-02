@@ -11,19 +11,19 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests for {@link DefaultErrorHandler}.
+ * Tests for {@link AsyncDefaultErrorHandler}.
  *
- * @author Tomaz Fernandes
+ * @author Bruno Augusto Garcia
+ * @author Rafael Condez Pavarini
  */
 @SuppressWarnings("unchecked")
-class DefaultErrorHandlerTests {
+class AsyncDefaultErrorHandlerTests {
 
 	@Test
-	void shouldChangeVisibilityToZero(){
+	void shouldChangeVisibilityToZero() {
 		Message<Object> message = mock(Message.class);
 		RuntimeException exception = new RuntimeException("Expected exception from shouldChangeVisibilityToZero");
 		MessageHeaders headers = mock(MessageHeaders.class);
@@ -32,7 +32,7 @@ class DefaultErrorHandlerTests {
 		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(visibility);
 		when(message.getHeaders()).thenReturn(headers);
 
-		DefaultErrorHandler<Object> handler = new DefaultErrorHandler<>();
+		AsyncDefaultErrorHandler<Object> handler = new AsyncDefaultErrorHandler<>();
 		CompletableFuture<Void> future = handler.handle(message, exception);
 
 		assertThat(future).isCompletedWithValue(null);
@@ -40,27 +40,24 @@ class DefaultErrorHandlerTests {
 	}
 
 	@Test
-	void shouldReturnError(){
+	void shouldReturnError() {
 		Message<Object> message = mock(Message.class);
 		RuntimeException exception = new RuntimeException("Expected exception from shouldReturnError");
 		MessageHeaders headers = mock(MessageHeaders.class);
 		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(null);
 		when(message.getHeaders()).thenReturn(headers);
 
-		DefaultErrorHandler<Object> handler = new DefaultErrorHandler<>();
+		AsyncDefaultErrorHandler<Object> handler = new AsyncDefaultErrorHandler<>();
 
-		assertThatThrownBy(() -> handler.handle(message, exception)).isInstanceOf(RuntimeException.class);
-
-		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
-
-		assertThatThrownBy(() -> handler.handle(message, exception)).isInstanceOf(RuntimeException.class);
+		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 
 		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
-		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
+
+		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 	}
 
 	@Test
-	void shouldChangeVisibilityToZeroBatch(){
+	void shouldChangeVisibilityToZeroBatch() {
 		Message<Object> message1 = mock(Message.class);
 		Message<Object> message2 = mock(Message.class);
 		Message<Object> message3 = mock(Message.class);
@@ -74,7 +71,7 @@ class DefaultErrorHandlerTests {
 		when(message2.getHeaders()).thenReturn(headers);
 		when(message3.getHeaders()).thenReturn(headers);
 
-		DefaultErrorHandler<Object> handler = new DefaultErrorHandler<>();
+		AsyncDefaultErrorHandler<Object> handler = new AsyncDefaultErrorHandler<>();
 		CompletableFuture<Void> future = handler.handle(batch, exception);
 
 		assertThat(future).isCompletedWithValue(null);
@@ -90,7 +87,7 @@ class DefaultErrorHandlerTests {
 
 
 	@Test
-	void shouldReturnErrorBatch(){
+	void shouldNotReturnCompletableFailedAtBatch() {
 		Message<Object> message1 = mock(Message.class);
 		Message<Object> message2 = mock(Message.class);
 		Message<Object> message3 = mock(Message.class);
@@ -101,15 +98,25 @@ class DefaultErrorHandlerTests {
 		when(message1.getHeaders()).thenReturn(headers);
 		when(message2.getHeaders()).thenReturn(headers);
 		when(message3.getHeaders()).thenReturn(headers);
-		DefaultErrorHandler<Object> handler = new DefaultErrorHandler<>();
+		AsyncDefaultErrorHandler<Object> handler = new AsyncDefaultErrorHandler<>();
 
-		assertThatThrownBy(() -> handler.handle(batch, exception))
-			.isInstanceOf(RuntimeException.class);
+		assertThat(handler.handle(batch, exception)).isCompletedWithValue(null);
 
 		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER))
 			.thenReturn(new Object());
+		assertThat(handler.handle(batch, exception)).isCompletedWithValue(null);
 
-		assertThatThrownBy(() -> handler.handle(batch, exception))
-			.isInstanceOf(RuntimeException.class);
+		Visibility visibility = mock(Visibility.class);
+		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER))
+			.thenReturn(visibility);
+		when(visibility.changeToAsync(0))
+			.thenReturn(
+				CompletableFuture.completedFuture(null),
+				CompletableFuture.failedFuture(new RuntimeException("Visibility change failed")),
+				CompletableFuture.completedFuture(null)
+			);
+		assertThat(handler.handle(batch, exception)).isCompletedWithValue(null);
+		verify(visibility, times(3)).changeToAsync(0);
+
 	}
 }

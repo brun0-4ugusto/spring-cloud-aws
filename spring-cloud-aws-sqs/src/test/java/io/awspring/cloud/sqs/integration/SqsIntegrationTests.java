@@ -26,7 +26,7 @@ import io.awspring.cloud.sqs.listener.*;
 import io.awspring.cloud.sqs.listener.acknowledgement.*;
 import io.awspring.cloud.sqs.listener.acknowledgement.handler.AcknowledgementMode;
 import io.awspring.cloud.sqs.listener.errorhandler.AsyncErrorHandler;
-import io.awspring.cloud.sqs.listener.errorhandler.DefaultErrorHandler;
+import io.awspring.cloud.sqs.listener.errorhandler.AsyncDefaultErrorHandler;
 import io.awspring.cloud.sqs.listener.interceptor.AsyncMessageInterceptor;
 import io.awspring.cloud.sqs.listener.sink.MessageSink;
 import io.awspring.cloud.sqs.listener.source.AbstractSqsMessageSource;
@@ -147,8 +147,8 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 			createQueue(client, MANUALLY_CREATE_FACTORY_QUEUE_NAME),
 			createQueue(client, CONSUMES_ONE_MESSAGE_AT_A_TIME_QUEUE_NAME),
 			createQueue(client, MAX_CONCURRENT_MESSAGES_QUEUE_NAME),
-			createQueue(client, SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_QUEUE_NAME,singletonMap(QueueAttributeName.VISIBILITY_TIMEOUT, "20")),
-			createQueue(client, SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_BATCH_QUEUE_NAME)).join();
+			createQueue(client, SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_QUEUE_NAME,singletonMap(QueueAttributeName.VISIBILITY_TIMEOUT, "500")),
+			createQueue(client, SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_BATCH_QUEUE_NAME,singletonMap(QueueAttributeName.VISIBILITY_TIMEOUT, "500"))).join();
 	}
 
 	@Autowired
@@ -195,7 +195,7 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 		sqsTemplate.sendManyAsync(SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_BATCH_QUEUE_NAME, messages);
 		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_BATCH_QUEUE_NAME, messages);
 
-		assertThat(latchContainer.countDownBatchVisibility.await(60, TimeUnit.SECONDS)).isTrue();
+		assertThat(latchContainer.countDownBatchVisibility.await(10, TimeUnit.SECONDS)).isTrue();
 	}
 
 	@Test
@@ -470,8 +470,7 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 		@SqsListener(queueNames = SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_BATCH_QUEUE_NAME,
 			messageVisibilitySeconds = "500",
 			factory = SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_FACTORY,
-			id = "visibilityBatchErrHandler",
-			maxMessagesPerPoll = "10")
+			id = "visibilityBatchErrHandler")
 		CompletableFuture<Void> listen(List<Message<String>> messages) {
 			logger.debug("Received messages {} from queue {}", MessageHeaderUtils.getId(messages),
 				messages.get(0).getHeaders().get(SqsHeaders.SQS_QUEUE_NAME_HEADER));
@@ -669,7 +668,7 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 						}
 					}
 				})
-				.errorHandler(new DefaultErrorHandler<>())
+				.errorHandler(new AsyncDefaultErrorHandler<>())
 				.sqsAsyncClientSupplier(BaseSqsIntegrationTest::createAsyncClient)
 				.build();
 		}
