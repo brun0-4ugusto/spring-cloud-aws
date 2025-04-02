@@ -54,6 +54,9 @@ class DefaultErrorHandlerTests {
 		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
 
 		assertThatThrownBy(() -> handler.handle(message, exception)).isInstanceOf(RuntimeException.class);
+
+		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
+		when(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER)).thenReturn(new Object());
 	}
 
 	@Test
@@ -108,6 +111,5 @@ class DefaultErrorHandlerTests {
 
 		assertThatThrownBy(() -> handler.handle(batch, exception))
 			.isInstanceOf(RuntimeException.class);
-
 	}
 }

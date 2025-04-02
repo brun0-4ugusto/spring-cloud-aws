@@ -25,49 +25,41 @@ import java.util.function.Function;
  * @since 3.3
  */
 public class DefaultErrorHandler<T> implements AsyncErrorHandler<T> {
-	Logger logger = LoggerFactory.getLogger(DefaultErrorHandler.class);
 
+	private final Logger logger = LoggerFactory.getLogger(DefaultErrorHandler.class);
 
 	@Override
 	public CompletableFuture<Void> handle(Message<T> message, Throwable t) {
-		return CompletableFutures.exceptionallyCompose(
-			changeTimeoutToZero(message),
-			CompletableFutures::failedFuture
-		);
+		return changeTimeoutToZero(message);
 	}
 
 	@Override
 	public CompletableFuture<Void> handle(Collection<Message<T>> messages, Throwable t) {
-		return changeTimeoutToZeroCollectionOfMessages(messages);
+		return changeTimeoutToZero(messages);
 	}
 
 
-	private CompletableFuture<Void> changeTimeoutToZeroCollectionOfMessages(Collection<Message<T>> messages) {
+	private CompletableFuture<Void> changeTimeoutToZero(Collection<Message<T>> messages) {
 		return CompletableFuture.allOf(
 			messages.stream()
 				.map(msg -> changeTimeoutToZero(msg)
-					.exceptionally(throwable -> logError(throwable, msg)))
+					.exceptionally(this::logError))
 				.toArray(CompletableFuture[]::new)
 		);
 	}
-
-	private Void logError(Throwable t, Message<?> message) {
-		logger.error("Message Not Recovery {}. Exception: {}", t.getMessage(), t);
-		return null;
-	}
-
 
 	private CompletableFuture<Void> changeTimeoutToZero(Message<T> message) {
 		Visibility visibilityTimeout = getVisibilityTimeout(message);
 		return visibilityTimeout.changeToAsync(0);
 	}
 
-
 	private Visibility getVisibilityTimeout(Message<T> message) {
-		Object visibility = message.getHeaders().get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER);
-		if (Objects.isNull(visibility) || !(visibility instanceof Visibility)) {
-			throw new RuntimeException("Invalid visibility header");
-		}
-		return (Visibility) visibility;
+		return (Visibility) message.getHeaders().get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER);
 	}
+
+	private Void logError(Throwable t) {
+		logger.error("Message Not Recovery {}. Exception: {}", t.getMessage(), t);
+		return null;
+	}
+
 }
