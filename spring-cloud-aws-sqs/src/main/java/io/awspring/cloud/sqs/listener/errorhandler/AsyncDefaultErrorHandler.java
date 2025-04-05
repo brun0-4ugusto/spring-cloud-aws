@@ -1,5 +1,7 @@
 package io.awspring.cloud.sqs.listener.errorhandler;
 
+import io.awspring.cloud.sqs.MessageHeaderUtils;
+import io.awspring.cloud.sqs.listener.BatchVisibility;
 import io.awspring.cloud.sqs.listener.SqsHeaders;
 import io.awspring.cloud.sqs.listener.Visibility;
 import org.slf4j.Logger;
@@ -17,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
  * exception occurs, effectively making the message immediately available for reprocessing.
  *
  * @author Bruno Augusto Garcia
- * @author Rafael Condez Pavarini
+ * @author Rafael Pavarini
  */
 public class AsyncDefaultErrorHandler<T> implements AsyncErrorHandler<T> {
 
@@ -33,6 +35,14 @@ public class AsyncDefaultErrorHandler<T> implements AsyncErrorHandler<T> {
 		return changeTimeoutToZero(messages);
 	}
 
+	private CompletableFuture<Void> changeTimeoutToZero(Message<T> message) {
+		try {
+			Visibility visibilityTimeout = getVisibilityTimeout(message);
+			return visibilityTimeout.changeToAsync(0);
+		} catch (Exception e) {
+			return CompletableFuture.failedFuture(e);
+		}
+	}
 
 	private CompletableFuture<Void> changeTimeoutToZero(Collection<Message<T>> messages) {
 		return CompletableFuture.allOf(
@@ -43,17 +53,8 @@ public class AsyncDefaultErrorHandler<T> implements AsyncErrorHandler<T> {
 		);
 	}
 
-	private CompletableFuture<Void> changeTimeoutToZero(Message<T> message) {
-		try {
-			Visibility visibilityTimeout = getVisibilityTimeout(message);
-			return visibilityTimeout.changeToAsync(0);
-		} catch (Exception e) {
-			return CompletableFuture.failedFuture(e);
-		}
-	}
-
 	private Visibility getVisibilityTimeout(Message<T> message) {
-		return (Visibility) Objects.requireNonNull(message.getHeaders().get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER));
+		return MessageHeaderUtils.getHeader(message, SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class);
 	}
 
 	/**
