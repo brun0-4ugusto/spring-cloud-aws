@@ -176,16 +176,11 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 
 	@Test
 	void receivesMessageVisibilityTimeout() throws Exception {
-		String messageBody = "receivesMessageVisibilityTimeout-payload";
+		String messageBody = UUID.randomUUID().toString();
 		sqsTemplate.send(SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_QUEUE_NAME, messageBody);
 		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_QUEUE_NAME, messageBody);
 
-		assertThat(latchContainer.messageDoesNotProcessWithSuccessReturnToQueueLatch.await(10, TimeUnit.SECONDS)).isTrue();
-
-		assertThat(latchContainer.retryHappenedLatch.await(15, TimeUnit.SECONDS)).isTrue();
-		assertThat(latchContainer.countDownRetryLatch.await(15, TimeUnit.SECONDS)).isTrue();
-		assertThat(latchContainer.acknowledgementCallbackSuccessLatch.await(10, TimeUnit.SECONDS)).isTrue();
-
+		assertThat(latchContainer.receivesRetryMessageQuicklyLatch.await(10, TimeUnit.SECONDS)).isTrue();
 	}
 
 	@Test
@@ -443,20 +438,26 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 		@Autowired
 		LatchContainer latchContainer;
 
+		private static final Map<String, Long> previousReceivedMessageTimestamps = new ConcurrentHashMap<>();
+
+		private static final int MAX_EXPECTED_ELAPSED_TIME_BETWEEN_MSG_RECEIVES_IN_MS = 5000;
+
 		@SqsListener(queueNames = SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_QUEUE_NAME,
-			messageVisibilitySeconds = "500",
+			messageVisibilitySeconds = "10",
 			factory = SUCCESS_VISIBILITY_TIMEOUT_TO_ZERO_FACTORY,
 			id = "visibilityErrHandler")
 		CompletableFuture<Void> listen(Message<String> message, @Header(SqsHeaders.SQS_QUEUE_NAME_HEADER) String queueName) {
 			logger.info("Received message {} from queue {}", message, queueName);
-			if (Objects.equals(message.getHeaders().get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT), "1")) {
-				latchContainer.messageDoesNotProcessWithSuccessReturnToQueueLatch.countDown();
-				latchContainer.countDownRetryLatch.countDown();
-				return CompletableFutures.failedFuture(new RuntimeException("Expected exception from visibilityErrHandler"));
+			Long prevReceivedMessageTimestamp = previousReceivedMessageTimestamps.get(message.getPayload());
+			if(prevReceivedMessageTimestamp == null) {
+				previousReceivedMessageTimestamps.put(message.getPayload(), System.currentTimeMillis());
+				return CompletableFuture.failedFuture(new RuntimeException("Expected exception from visibility-err-handler"));
 			}
 
-			latchContainer.countDownRetryLatch.countDown();
-			latchContainer.retryHappenedLatch.countDown();
+			long elapsedTimeBetweenMessageReceivesInMs = System.currentTimeMillis() - prevReceivedMessageTimestamp;
+			if(elapsedTimeBetweenMessageReceivesInMs < MAX_EXPECTED_ELAPSED_TIME_BETWEEN_MSG_RECEIVES_IN_MS) {
+				latchContainer.receivesRetryMessageQuicklyLatch.countDown();
+			}
 
 			return CompletableFuture.completedFuture(null);
 		}
@@ -565,6 +566,7 @@ class SqsIntegrationTests extends BaseSqsIntegrationTest {
 	static class LatchContainer {
 
 		final CountDownLatch receivesMessageLatch = new CountDownLatch(1);
+		final CountDownLatch receivesRetryMessageQuicklyLatch = new CountDownLatch(1);
 		final CountDownLatch receivesMessageBatchLatch = new CountDownLatch(20);
 		final CountDownLatch receivesMessageAsyncLatch = new CountDownLatch(1);
 		final CountDownLatch doesNotAckLatch = new CountDownLatch(2);
