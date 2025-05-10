@@ -15,10 +15,13 @@
  */
 package io.awspring.cloud.sqs.listener.errorhandler;
 
+import io.awspring.cloud.sqs.CompletableFutures;
 import io.awspring.cloud.sqs.MessageHeaderUtils;
 import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
 import io.awspring.cloud.sqs.listener.SqsHeaders;
 import io.awspring.cloud.sqs.listener.Visibility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.Message;
 import org.springframework.util.Assert;
 
@@ -43,41 +46,20 @@ import java.util.stream.Collectors;
  */
 
 public class ExponentialBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
-	/**
-	 * The default initial visibility timeout interval.
-	 */
-	public static final int DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS = 100;
-	/**
-	 * The default multiplier, which doubles the visibility timeout.
-	 */
-	public static final double DEFAULT_MULTIPLIER = 2.0;
-	/**
-	 * The default maximum visibility timeout interval,
-	 * which corresponds to the maximum SQS visibility timeout of 12 hours.
-	 */
-	public static final int DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS = 43200;
+	private static final Logger logger = LoggerFactory.getLogger(ExponentialBackoffErrorHandler.class);
 
 	private final int initialVisibilityTimeoutSeconds;
 	private final double multiplier;
 	private final int maxVisibilityTimeoutSeconds;
 
-	public ExponentialBackoffErrorHandler() {
-		this(DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS, DEFAULT_MULTIPLIER, DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
-	}
-
-	public ExponentialBackoffErrorHandler(int initialVisibilityTimeoutSeconds, double multiplier) {
-		this(initialVisibilityTimeoutSeconds, multiplier, DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
-	}
-
-	public ExponentialBackoffErrorHandler(int initialVisibilityTimeoutSeconds, double multiplier, int maxVisibilityTimeoutSeconds) {
-		checkVisibilityTimeout(initialVisibilityTimeoutSeconds);
-		checkMultiplier(multiplier);
-		checkVisibilityTimeout(maxVisibilityTimeoutSeconds);
-		Assert.isTrue(initialVisibilityTimeoutSeconds <= maxVisibilityTimeoutSeconds,
-			"Initial visibility timeout must not exceed max visibility timeout");
+	private ExponentialBackoffErrorHandler(int initialVisibilityTimeoutSeconds, double multiplier, int maxVisibilityTimeoutSeconds) {
 		this.initialVisibilityTimeoutSeconds = initialVisibilityTimeoutSeconds;
 		this.multiplier = multiplier;
 		this.maxVisibilityTimeoutSeconds = maxVisibilityTimeoutSeconds;
+	}
+
+	public static T Builder<T> builder(){
+		return new Builder<>();
 	}
 
 	@Override
@@ -98,13 +80,17 @@ public class ExponentialBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 			.entrySet()
 			.stream()
 			.map(entry -> {
-				int timeout = calculateVisibilityTimeout(entry.getKey());
+				int visibilityTimeout = calculateVisibilityTimeout(entry.getKey());
 
 				QueueMessageVisibility firstVisibilityMessage = (QueueMessageVisibility) getVisibilityTimeout(entry.getValue().get(0));
 
 				Collection<Message<?>> batch = new ArrayList<>(entry.getValue());
 
-				return firstVisibilityMessage.toBatchVisibility(batch).changeToAsync(timeout);
+				logger.debug("Changing batch visibility timeout to {} - Messages Id {}", visibilityTimeout, MessageHeaderUtils.getId(entry.getValue()));
+				return CompletableFutures.exceptionallyCompose(firstVisibilityMessage.toBatchVisibility(batch).changeToAsync(visibilityTimeout), throwable -> {
+					logger.warn("Failed to change batch visibility timeout to {} - Messages Id {}", visibilityTimeout,  MessageHeaderUtils.getId(entry.getValue()), throwable);
+					return CompletableFuture.failedFuture(throwable);
+				});
 			}).toArray(CompletableFuture[]::new);
 
 		return CompletableFuture.allOf(futures);
@@ -114,7 +100,11 @@ public class ExponentialBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 		Visibility visibilityTimeout = getVisibilityTimeout(message);
 		long receiveMessageCount = getReceiveMessageCount(message);
 		int timeout = calculateVisibilityTimeout(receiveMessageCount);
-		return visibilityTimeout.changeToAsync(timeout);
+		logger.debug("Changing visibility timeout to {} - Message Id {}", visibilityTimeout, message.getHeaders().getId());
+		return CompletableFutures.exceptionallyCompose(visibilityTimeout.changeToAsync(timeout), throwable -> {
+			logger.warn("Failed to change visibility timeout to {} - Message Id {}", visibilityTimeout, message.getHeaders().getId(), throwable);
+			return CompletableFuture.failedFuture(throwable);
+		});
 	}
 
 	private int calculateVisibilityTimeout(long receiveMessageCount) {
@@ -132,15 +122,55 @@ public class ExponentialBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 		return MessageHeaderUtils.getHeader(message, SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class);
 	}
 
-	private void checkVisibilityTimeout(long visibilityTimeout) {
-		Assert.isTrue(visibilityTimeout > 0, () -> "Invalid visibility timeout '" +
-			visibilityTimeout + "'. Should be greater than 0 ");
-		Assert.isTrue(visibilityTimeout <= DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS, () -> "Invalid visibility timeout '" +
-			visibilityTimeout + "'. Should be less than or equal to " + DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
-	}
+	public static class Builder<T> {
 
-	private void checkMultiplier(double multiplier) {
-		Assert.isTrue(multiplier >= 1, () -> "Invalid multiplier '" + multiplier + "'. Should be greater than " +
-			"or equal to 1.");
+		private static final int DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS = 100;
+
+		/**
+		 * The default multiplier, which doubles the visibility timeout.
+		 */
+		private static final double DEFAULT_MULTIPLIER = 2.0;
+
+		/**
+		 * The default maximum visibility timeout interval,
+		 * which corresponds to the maximum SQS visibility timeout of 12 hours.
+		 */
+		private static final int DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS = 43200;
+
+		private int initialVisibilityTimeoutSeconds = DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS;
+		private double multiplier = DEFAULT_MULTIPLIER;
+		private int maxVisibilityTimeoutSeconds = DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS;
+
+		public Builder<T> initialVisibilityTimeoutSeconds(int initialVisibilityTimeoutSeconds) {
+			checkVisibilityTimeout(initialVisibilityTimeoutSeconds);
+			this.initialVisibilityTimeoutSeconds = initialVisibilityTimeoutSeconds;
+			return this;
+		}
+
+		public Builder<T> multiplier(double multiplier) {
+			Assert.isTrue(multiplier >= 1, () -> "Invalid multiplier '" + multiplier + "'. Should be greater than " +
+				"or equal to 1.");
+			this.multiplier = multiplier;
+			return this;
+		}
+
+		public Builder<T> maxVisibilityTimeoutSeconds(int maxVisibilityTimeoutSeconds) {
+			checkVisibilityTimeout(maxVisibilityTimeoutSeconds);
+			this.maxVisibilityTimeoutSeconds = maxVisibilityTimeoutSeconds;
+			return this;
+		}
+
+		public ExponentialBackoffErrorHandler<T> build() {
+			Assert.isTrue(initialVisibilityTimeoutSeconds <= maxVisibilityTimeoutSeconds,
+				"Initial visibility timeout must not exceed max visibility timeout");
+			return new ExponentialBackoffErrorHandler<T>(initialVisibilityTimeoutSeconds, multiplier, maxVisibilityTimeoutSeconds);
+		}
+
+		private void checkVisibilityTimeout(long visibilityTimeout) {
+			Assert.isTrue(visibilityTimeout > 0, () -> "Invalid visibility timeout '" +
+				visibilityTimeout + "'. Should be greater than 0 ");
+			Assert.isTrue(visibilityTimeout <= DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS, () -> "Invalid visibility timeout '" +
+				visibilityTimeout + "'. Should be less than or equal to " + DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
+		}
 	}
 }

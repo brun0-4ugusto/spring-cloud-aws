@@ -302,7 +302,10 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 					.maxMessagesPerPoll(10)
 					.queueAttributeNames(Collections.singletonList(QueueAttributeName.QUEUE_ARN))
 					.maxDelayBetweenPolls(Duration.ofSeconds(15)))
-				.errorHandler(new ExponentialBackoffErrorHandler<>(ExponentialBackOffErrorHandlerListener.initialValueSeconds,ExponentialBackOffErrorHandlerListener.multiplier))
+				.errorHandler(ExponentialBackoffErrorHandler.builder()
+					.initialVisibilityTimeoutSeconds(ExponentialBackOffErrorHandlerListener.initialValueSeconds)
+					.multiplier(ExponentialBackOffErrorHandlerListener.multiplier)
+					.build())
 				.sqsAsyncClientSupplier(BaseSqsIntegrationTest::createAsyncClient)
 				.build();
 		}
