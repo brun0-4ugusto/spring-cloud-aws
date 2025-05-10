@@ -15,18 +15,6 @@
  */
 package io.awspring.cloud.sqs.listener.errorhandler;
 
-import io.awspring.cloud.sqs.listener.BatchVisibility;
-import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
-import io.awspring.cloud.sqs.listener.SqsHeaders;
-import io.awspring.cloud.sqs.listener.Visibility;
-import org.junit.jupiter.api.Test;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageHeaders;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -34,6 +22,18 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
+
+import io.awspring.cloud.sqs.listener.BatchVisibility;
+import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
+import io.awspring.cloud.sqs.listener.SqsHeaders;
+import io.awspring.cloud.sqs.listener.Visibility;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.Test;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHeaders;
 
 /**
  * Tests for {@link ExponentialBackoffErrorHandler}.
@@ -44,20 +44,21 @@ import static org.mockito.internal.verification.VerificationModeFactory.times;
 class ExponentialBackoffErrorHandlerTest {
 
 	@Test
-	void shouldChangeVisibilityTimeoutExponentiallyWithDefaultIntialVisibilityTimeout() {
+	void shouldChangeVisibilityTimeoutExponentiallyWithDefaultInitialVisibilityTimeout() {
 		Message<Object> message = mock(Message.class);
 		RuntimeException exception = new RuntimeException("Expected exception from shouldChangeVisibilityToZero");
 		MessageHeaders headers = mock(MessageHeaders.class);
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>();
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder().build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
-		then(visibility).should().changeToAsync(ExponentialBackoffErrorHandler.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS);
+		then(visibility).should().changeToAsync(100);
 	}
 
 	@Test
@@ -68,13 +69,15 @@ class ExponentialBackoffErrorHandlerTest {
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(ExponentialBackoffErrorHandler.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS, 2);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.initialVisibilityTimeoutSeconds(43200).multiplier(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
-		then(visibility).should().changeToAsync(ExponentialBackoffErrorHandler.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
+		then(visibility).should().changeToAsync(43200);
 	}
 
 	@Test
@@ -85,10 +88,12 @@ class ExponentialBackoffErrorHandlerTest {
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(500, 2);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.initialVisibilityTimeoutSeconds(500).multiplier(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
@@ -102,18 +107,20 @@ class ExponentialBackoffErrorHandlerTest {
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(500, 2, 501);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.maxVisibilityTimeoutSeconds(501).initialVisibilityTimeoutSeconds(500).multiplier(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
 
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("2");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("2");
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(501);
-
 	}
 
 	@Test
@@ -124,15 +131,18 @@ class ExponentialBackoffErrorHandlerTest {
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(500, 2);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.initialVisibilityTimeoutSeconds(500).multiplier(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
 
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("2");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("2");
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(1000);
 
@@ -153,21 +163,30 @@ class ExponentialBackoffErrorHandlerTest {
 		given(visibility.toBatchVisibility(any())).willReturn(batchvisibility);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers2.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
+		given(headers.getId()).willReturn(UUID.randomUUID());
+		given(headers2.getId()).willReturn(UUID.randomUUID());
+		given(headers.get("id", UUID.class)).willReturn(UUID.randomUUID());
+		given(headers2.get("id", UUID.class)).willReturn(UUID.randomUUID());
 		given(message1.getHeaders()).willReturn(headers);
 		given(message2.getHeaders()).willReturn(headers2);
 		given(message3.getHeaders()).willReturn(headers);
 
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("1");
-		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("2");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("1");
+		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("2");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(500, 2);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.initialVisibilityTimeoutSeconds(500).multiplier(2).build();
 
 		assertThat(handler.handle(batch, exception)).isCompletedExceptionally();
 		then(batchvisibility).should(times(1)).changeToAsync(500);
 
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("2");
-		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("3");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("2");
+		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("3");
 		assertThat(handler.handle(batch, exception)).isCompletedExceptionally();
 
 		then(batchvisibility).should(times(2)).changeToAsync(1000);
@@ -182,12 +201,14 @@ class ExponentialBackoffErrorHandlerTest {
 		Visibility visibility = mock(Visibility.class);
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
-		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class)).willReturn("11");
+		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
+				.willReturn("11");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		ExponentialBackoffErrorHandler<Object> handler = new ExponentialBackoffErrorHandler<>(ExponentialBackoffErrorHandler.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS, Integer.MAX_VALUE);
+		ExponentialBackoffErrorHandler<Object> handler = ExponentialBackoffErrorHandler.builder()
+				.multiplier(Integer.MAX_VALUE).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
-		then(visibility).should().changeToAsync(ExponentialBackoffErrorHandler.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS);
+		then(visibility).should().changeToAsync(43200);
 	}
 }
