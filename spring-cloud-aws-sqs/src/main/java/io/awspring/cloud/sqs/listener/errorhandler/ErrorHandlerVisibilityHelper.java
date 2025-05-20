@@ -58,4 +58,18 @@ public class ErrorHandlerVisibilityHelper {
 		return Long.parseLong(MessageHeaderUtils.getHeaderAsString(message,
 				SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT));
 	}
+
+	public static int calculateVisibilityTimeoutExponentially(long receiveMessageCount,
+			int initialVisibilityTimeoutSeconds, double multiplier, int maxVisibilityTimeoutSeconds) {
+		double exponential = initialVisibilityTimeoutSeconds * Math.pow(multiplier, receiveMessageCount - 1);
+		int capped = (int) Math.min(exponential, (long) Integer.MAX_VALUE);
+		return Math.min(capped, maxVisibilityTimeoutSeconds);
+	}
+
+	public static int calculateVisibilityTimeoutLinearly(long receiveMessageCount, int initialVisibilityTimeoutSeconds,
+			double multiplier, int maxVisibilityTimeoutSeconds) {
+		double exponential = initialVisibilityTimeoutSeconds + multiplier * (receiveMessageCount - 1);
+		int capped = (int) Math.min(exponential, (long) Integer.MAX_VALUE);
+		return Math.min(capped, maxVisibilityTimeoutSeconds);
+	}
 }
