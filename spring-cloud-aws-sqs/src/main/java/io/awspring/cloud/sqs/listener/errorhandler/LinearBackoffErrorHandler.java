@@ -44,13 +44,13 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 	private static final Logger logger = LoggerFactory.getLogger(LinearBackoffErrorHandler.class);
 
 	private final int initialVisibilityTimeoutSeconds;
-	private final double multiplier;
+	private final int increment;
 	private final int maxVisibilityTimeoutSeconds;
 
-	private LinearBackoffErrorHandler(int initialVisibilityTimeoutSeconds, double multiplier,
+	private LinearBackoffErrorHandler(int initialVisibilityTimeoutSeconds, int increment,
 			int maxVisibilityTimeoutSeconds) {
 		this.initialVisibilityTimeoutSeconds = initialVisibilityTimeoutSeconds;
-		this.multiplier = multiplier;
+		this.increment = increment;
 		this.maxVisibilityTimeoutSeconds = maxVisibilityTimeoutSeconds;
 	}
 
@@ -103,7 +103,7 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 
 	private int calculateTimeout(long receiveMessageCount) {
 		return ErrorHandlerVisibilityHelper.calculateVisibilityTimeoutLinearly(receiveMessageCount,
-				initialVisibilityTimeoutSeconds, multiplier, maxVisibilityTimeoutSeconds);
+				initialVisibilityTimeoutSeconds, increment, maxVisibilityTimeoutSeconds);
 	}
 
 	public static <T> Builder<T> builder() {
@@ -112,35 +112,25 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 
 	public static class Builder<T> {
 
-		/**
-		 * The default initial visibility timeout.
-		 */
-		private static final int DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS = 100;
-
-		/**
-		 * The default multiplier, which doubles the visibility timeout.
-		 */
-		private static final double DEFAULT_MULTIPLIER = 2.0;
-
-		private int initialVisibilityTimeoutSeconds = DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS;
-		private double multiplier = DEFAULT_MULTIPLIER;
-		private int maxVisibilityTimeoutSeconds = Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS;
+		private int initialVisibilityTimeoutSeconds = BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS;
+		private int increment = (int) BackoffVisibilityConstants.DEFAULT_MULTIPLIER;
+		private int maxVisibilityTimeoutSeconds = BackoffVisibilityConstants.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS;
 
 		public Builder<T> initialVisibilityTimeoutSeconds(int initialVisibilityTimeoutSeconds) {
-			checkVisibilityTimeout(initialVisibilityTimeoutSeconds);
+			ErrorHandlerVisibilityHelper.checkVisibilityTimeout(initialVisibilityTimeoutSeconds);
 			this.initialVisibilityTimeoutSeconds = initialVisibilityTimeoutSeconds;
 			return this;
 		}
 
-		public Builder<T> multiplier(double multiplier) {
-			Assert.isTrue(multiplier >= 1,
-					() -> "Invalid multiplier '" + multiplier + "'. Should be greater than " + "or equal to 1.");
-			this.multiplier = multiplier;
+		public Builder<T> increment(int increment) {
+			Assert.isTrue(increment >= 1,
+					() -> "Invalid increment '" + increment + "'. Should be greater than " + "or equal to 1.");
+			this.increment = increment;
 			return this;
 		}
 
 		public Builder<T> maxVisibilityTimeoutSeconds(int maxVisibilityTimeoutSeconds) {
-			checkVisibilityTimeout(maxVisibilityTimeoutSeconds);
+			ErrorHandlerVisibilityHelper.checkVisibilityTimeout(maxVisibilityTimeoutSeconds);
 			this.maxVisibilityTimeoutSeconds = maxVisibilityTimeoutSeconds;
 			return this;
 		}
@@ -148,16 +138,8 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 		public LinearBackoffErrorHandler<T> build() {
 			Assert.isTrue(initialVisibilityTimeoutSeconds <= maxVisibilityTimeoutSeconds,
 					"Initial visibility timeout must not exceed max visibility timeout");
-			return new LinearBackoffErrorHandler<T>(initialVisibilityTimeoutSeconds, multiplier,
+			return new LinearBackoffErrorHandler<T>(initialVisibilityTimeoutSeconds, increment,
 					maxVisibilityTimeoutSeconds);
-		}
-
-		private void checkVisibilityTimeout(long visibilityTimeout) {
-			Assert.isTrue(visibilityTimeout > 0,
-					() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be greater than 0 ");
-			Assert.isTrue(visibilityTimeout <= Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS,
-					() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be less than or equal to "
-							+ Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
 		}
 	}
 }

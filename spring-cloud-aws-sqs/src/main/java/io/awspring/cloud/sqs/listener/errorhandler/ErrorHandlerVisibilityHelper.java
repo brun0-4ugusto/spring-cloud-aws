@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.messaging.Message;
+import org.springframework.util.Assert;
 
 /**
  * Utility methods for Error Handler.
@@ -61,15 +62,23 @@ public class ErrorHandlerVisibilityHelper {
 
 	public static int calculateVisibilityTimeoutExponentially(long receiveMessageCount,
 			int initialVisibilityTimeoutSeconds, double multiplier, int maxVisibilityTimeoutSeconds) {
-		double exponential = initialVisibilityTimeoutSeconds * Math.pow(multiplier, receiveMessageCount - 1);
-		int capped = (int) Math.min(exponential, (long) Integer.MAX_VALUE);
+		double timeout = initialVisibilityTimeoutSeconds * Math.pow(multiplier, receiveMessageCount - 1);
+		int capped = (int) Math.min(timeout, (long) Integer.MAX_VALUE);
 		return Math.min(capped, maxVisibilityTimeoutSeconds);
 	}
 
 	public static int calculateVisibilityTimeoutLinearly(long receiveMessageCount, int initialVisibilityTimeoutSeconds,
-			double multiplier, int maxVisibilityTimeoutSeconds) {
-		double exponential = initialVisibilityTimeoutSeconds + multiplier * (receiveMessageCount - 1);
-		int capped = (int) Math.min(exponential, (long) Integer.MAX_VALUE);
+			int increment, int maxVisibilityTimeoutSeconds) {
+		long timeout = initialVisibilityTimeoutSeconds + increment * (receiveMessageCount - 1);
+		int capped = (int) Math.min(timeout, Integer.MAX_VALUE);
 		return Math.min(capped, maxVisibilityTimeoutSeconds);
+	}
+
+	public static void checkVisibilityTimeout(long visibilityTimeout) {
+		Assert.isTrue(visibilityTimeout > 0,
+			() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be greater than 0 ");
+		Assert.isTrue(visibilityTimeout <= Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS,
+			() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be less than or equal to "
+				+ Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
 	}
 }
