@@ -76,9 +76,9 @@ public class ErrorHandlerVisibilityHelper {
 
 	public static void checkVisibilityTimeout(long visibilityTimeout) {
 		Assert.isTrue(visibilityTimeout > 0,
-			() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be greater than 0 ");
+				() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be greater than 0 ");
 		Assert.isTrue(visibilityTimeout <= Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS,
-			() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be less than or equal to "
-				+ Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
+				() -> "Invalid visibility timeout '" + visibilityTimeout + "'. Should be less than or equal to "
+						+ Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
 	}
 }

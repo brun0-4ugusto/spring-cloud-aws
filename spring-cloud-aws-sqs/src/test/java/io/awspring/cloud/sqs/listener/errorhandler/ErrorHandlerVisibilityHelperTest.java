@@ -15,24 +15,23 @@
  */
 package io.awspring.cloud.sqs.listener.errorhandler;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+
 import io.awspring.cloud.sqs.listener.BatchVisibility;
 import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
 import io.awspring.cloud.sqs.listener.SqsHeaders;
 import io.awspring.cloud.sqs.listener.Visibility;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 /**
  * Tests for {@link ErrorHandlerVisibilityHelper}.
@@ -50,7 +49,7 @@ class ErrorHandlerVisibilityHelperTest {
 
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("30");
+				.willReturn("30");
 
 		long receiveMessageCount = ErrorHandlerVisibilityHelper.getReceiveMessageCount(message);
 
@@ -122,14 +121,14 @@ class ErrorHandlerVisibilityHelperTest {
 		given(highMsg2.getHeaders()).willReturn(highHeaders);
 
 		given(lowHeaders.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(highHeaders.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("30");
+				.willReturn("30");
 
 		List<Message<Object>> batch = List.of(lowMsg, highMsg1, highMsg2);
 
 		Map<Long, List<Message<Object>>> grouped = ErrorHandlerVisibilityHelper
-			.groupMessagesByReceiveMessageCount(batch);
+				.groupMessagesByReceiveMessageCount(batch);
 
 		assertThat(grouped).hasSize(2);
 		assertThat(grouped.get(1L)).containsExactly(lowMsg);
@@ -140,83 +139,61 @@ class ErrorHandlerVisibilityHelperTest {
 	@MethodSource("testCases")
 	void calculateVisibilityTimeoutExponentially(VisibilityTimeoutTestCase testCase) {
 		assertThat(testCase.calculateVisibilityTimeout(CalculationType.EXPONENTIAL))
-			.isEqualTo(testCase.timeoutExpectedExponentially);
+				.isEqualTo(testCase.timeoutExpectedExponentially);
 	}
 
 	@ParameterizedTest
 	@MethodSource("testCases")
 	void calculateVisibilityTimeoutLinearly(VisibilityTimeoutTestCase testCase) {
 		assertThat(testCase.calculateVisibilityTimeout(CalculationType.LINEAR))
-			.isEqualTo(testCase.timeoutExpectedLinearly);
+				.isEqualTo(testCase.timeoutExpectedLinearly);
 	}
 
 	private static Collection<VisibilityTimeoutTestCase> testCases() {
-		return List.of(minTestCase(),
-			maxTestCase(),
-			defaultTestCase(),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(2)
-				.timeoutExpectedExponentially(200)
-				.timeoutExpectedLinearly(102),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(3)
-				.timeoutExpectedExponentially(400)
-				.timeoutExpectedLinearly(104),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(5)
-				.timeoutExpectedExponentially(1600)
-				.timeoutExpectedLinearly(108),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(7)
-				.timeoutExpectedExponentially(6400)
-				.timeoutExpectedLinearly(112),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(11)
-				.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-				.timeoutExpectedLinearly(120),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(13)
-				.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-				.timeoutExpectedLinearly(124),
-			defaultVisibilityTimeoutSetup()
-				.receiveMessageCount(21551)
-				.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-				.timeoutExpectedLinearly(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-		);
+		return List.of(minTestCase(), maxTestCase(), defaultTestCase(),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(2).timeoutExpectedExponentially(200)
+						.timeoutExpectedLinearly(102),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(3).timeoutExpectedExponentially(400)
+						.timeoutExpectedLinearly(104),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(5).timeoutExpectedExponentially(1600)
+						.timeoutExpectedLinearly(108),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(7).timeoutExpectedExponentially(6400)
+						.timeoutExpectedLinearly(112),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(11)
+						.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
+						.timeoutExpectedLinearly(120),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(13)
+						.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
+						.timeoutExpectedLinearly(124),
+				defaultVisibilityTimeoutSetup().receiveMessageCount(21551)
+						.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
+						.timeoutExpectedLinearly(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS));
 	}
 
 	private static VisibilityTimeoutTestCase minTestCase() {
-		return new VisibilityTimeoutTestCase()
-			.initialVisibilityTimeoutSeconds(1)
-			.maxVisibilityTimeoutSeconds(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-			.multiplier(2.0)
-			.receiveMessageCount(1)
-			.timeoutExpectedExponentially(1)
-			.timeoutExpectedLinearly(1);
+		return new VisibilityTimeoutTestCase().initialVisibilityTimeoutSeconds(1)
+				.maxVisibilityTimeoutSeconds(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS).multiplier(2.0)
+				.receiveMessageCount(1).timeoutExpectedExponentially(1).timeoutExpectedLinearly(1);
 	}
 
 	private static VisibilityTimeoutTestCase defaultTestCase() {
-		return defaultVisibilityTimeoutSetup()
-			.receiveMessageCount(1)
-			.timeoutExpectedExponentially(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS)
-			.timeoutExpectedLinearly(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS);
+		return defaultVisibilityTimeoutSetup().receiveMessageCount(1)
+				.timeoutExpectedExponentially(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS)
+				.timeoutExpectedLinearly(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS);
 	}
 
 	private static VisibilityTimeoutTestCase defaultVisibilityTimeoutSetup() {
 		return new VisibilityTimeoutTestCase()
-			.initialVisibilityTimeoutSeconds(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS)
-			.maxVisibilityTimeoutSeconds(BackoffVisibilityConstants.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS)
-			.multiplier(BackoffVisibilityConstants.DEFAULT_MULTIPLIER);
+				.initialVisibilityTimeoutSeconds(BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS)
+				.maxVisibilityTimeoutSeconds(BackoffVisibilityConstants.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS)
+				.multiplier(BackoffVisibilityConstants.DEFAULT_MULTIPLIER);
 	}
 
 	private static VisibilityTimeoutTestCase maxTestCase() {
-		return new VisibilityTimeoutTestCase()
-			.initialVisibilityTimeoutSeconds(Integer.MAX_VALUE)
-			.maxVisibilityTimeoutSeconds(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-			.multiplier(2.0)
-			.receiveMessageCount(1)
-			.timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
-			.timeoutExpectedLinearly(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
+		return new VisibilityTimeoutTestCase().initialVisibilityTimeoutSeconds(Integer.MAX_VALUE)
+				.maxVisibilityTimeoutSeconds(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS).multiplier(2.0)
+				.receiveMessageCount(1).timeoutExpectedExponentially(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS)
+				.timeoutExpectedLinearly(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
 	}
 
 	private static class VisibilityTimeoutTestCase {
@@ -259,10 +236,10 @@ class ErrorHandlerVisibilityHelperTest {
 
 		int calculateVisibilityTimeout(CalculationType calculationType) {
 			return switch (calculationType) {
-				case EXPONENTIAL ->
-					ErrorHandlerVisibilityHelper.calculateVisibilityTimeoutExponentially(this.receiveMessageCount,
+			case EXPONENTIAL ->
+				ErrorHandlerVisibilityHelper.calculateVisibilityTimeoutExponentially(this.receiveMessageCount,
 						this.initialVisibilityTimeoutSeconds, this.multiplier, this.maxVisibilityTimeoutSeconds);
-				case LINEAR -> ErrorHandlerVisibilityHelper.calculateVisibilityTimeoutLinearly(this.receiveMessageCount,
+			case LINEAR -> ErrorHandlerVisibilityHelper.calculateVisibilityTimeoutLinearly(this.receiveMessageCount,
 					this.initialVisibilityTimeoutSeconds, (int) this.multiplier, this.maxVisibilityTimeoutSeconds);
 			};
 		}
