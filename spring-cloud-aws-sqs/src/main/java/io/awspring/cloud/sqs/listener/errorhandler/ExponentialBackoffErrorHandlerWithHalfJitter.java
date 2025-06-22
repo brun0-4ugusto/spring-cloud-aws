@@ -127,8 +127,7 @@ public class ExponentialBackoffErrorHandlerWithHalfJitter<T> implements AsyncErr
 		private int maxVisibilityTimeoutSeconds = BackoffVisibilityConstants.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS;
 		private Supplier<Random> randomSupplier = ThreadLocalRandom::current;
 
-		public ExponentialBackoffErrorHandlerWithHalfJitter.Builder<T> randomSupplier(
-			Supplier<Random> randomSupplier) {
+		public ExponentialBackoffErrorHandlerWithHalfJitter.Builder<T> randomSupplier(Supplier<Random> randomSupplier) {
 			this.randomSupplier = randomSupplier;
 			return this;
 		}

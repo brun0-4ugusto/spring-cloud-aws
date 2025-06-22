@@ -1,17 +1,19 @@
+/*
+ * Copyright 2013-2025 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.awspring.cloud.sqs.listener.errorhandler;
-
-import io.awspring.cloud.sqs.listener.BatchVisibility;
-import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
-import io.awspring.cloud.sqs.listener.SqsHeaders;
-import io.awspring.cloud.sqs.listener.Visibility;
-import org.junit.jupiter.api.Test;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageHeaders;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,6 +22,18 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
+
+import io.awspring.cloud.sqs.listener.BatchVisibility;
+import io.awspring.cloud.sqs.listener.QueueMessageVisibility;
+import io.awspring.cloud.sqs.listener.SqsHeaders;
+import io.awspring.cloud.sqs.listener.Visibility;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.Test;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHeaders;
 
 /**
  * Tests for {@link LinearBackoffErrorHandler}.
@@ -37,7 +51,7 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
 		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder().build();
@@ -55,11 +69,11 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
 		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.initialVisibilityTimeoutSeconds(43200).increment(20000).build();
+				.initialVisibilityTimeoutSeconds(43200).increment(20000).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
@@ -74,11 +88,11 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
 		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.initialVisibilityTimeoutSeconds(500).increment(2).build();
+				.initialVisibilityTimeoutSeconds(500).increment(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
@@ -93,17 +107,17 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.maxVisibilityTimeoutSeconds(501).initialVisibilityTimeoutSeconds(500).increment(2).build();
+		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder().maxVisibilityTimeoutSeconds(501)
+				.initialVisibilityTimeoutSeconds(500).increment(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
 
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("2");
+				.willReturn("2");
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(501);
 	}
@@ -117,17 +131,17 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
 		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.initialVisibilityTimeoutSeconds(500).increment(2).build();
+				.initialVisibilityTimeoutSeconds(500).increment(2).build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(500);
 
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("2");
+				.willReturn("2");
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(502);
 
@@ -157,21 +171,21 @@ class LinearBackoffErrorHandlerTest {
 		given(message3.getHeaders()).willReturn(headers);
 
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("1");
+				.willReturn("1");
 		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("2");
+				.willReturn("2");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
 		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.initialVisibilityTimeoutSeconds(500).increment(2).build();
+				.initialVisibilityTimeoutSeconds(500).increment(2).build();
 
 		assertThat(handler.handle(batch, exception)).isCompletedExceptionally();
 		then(batchvisibility).should(times(1)).changeToAsync(500);
 
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("2");
+				.willReturn("2");
 		given(headers2.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("3");
+				.willReturn("3");
 		assertThat(handler.handle(batch, exception)).isCompletedExceptionally();
 
 		then(batchvisibility).should(times(2)).changeToAsync(502);
@@ -187,11 +201,11 @@ class LinearBackoffErrorHandlerTest {
 		given(message.getHeaders()).willReturn(headers);
 		given(headers.get(SqsHeaders.SQS_VISIBILITY_TIMEOUT_HEADER, Visibility.class)).willReturn(visibility);
 		given(headers.get(SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class))
-			.willReturn("11");
+				.willReturn("11");
 		given(visibility.changeToAsync(anyInt())).willReturn(CompletableFuture.completedFuture(null));
 
-		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder()
-			.increment(Integer.MAX_VALUE).build();
+		LinearBackoffErrorHandler<Object> handler = LinearBackoffErrorHandler.builder().increment(Integer.MAX_VALUE)
+				.build();
 
 		assertThat(handler.handle(message, exception)).isCompletedExceptionally();
 		then(visibility).should().changeToAsync(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);

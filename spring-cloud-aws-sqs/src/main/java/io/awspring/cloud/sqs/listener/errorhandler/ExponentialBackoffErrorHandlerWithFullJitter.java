@@ -146,8 +146,7 @@ public class ExponentialBackoffErrorHandlerWithFullJitter<T> implements AsyncErr
 			return this;
 		}
 
-		public ExponentialBackoffErrorHandlerWithFullJitter.Builder<T> randomSupplier(
-			Supplier<Random> randomSupplier) {
+		public ExponentialBackoffErrorHandlerWithFullJitter.Builder<T> randomSupplier(Supplier<Random> randomSupplier) {
 			this.randomSupplier = randomSupplier;
 			return this;
 		}

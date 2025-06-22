@@ -136,15 +136,15 @@ class ErrorHandlerVisibilityHelperTest {
 	}
 
 	@Test
-	void checkVisibilityTimeout(){
+	void checkVisibilityTimeout() {
 		assertThatNoException().isThrownBy(() -> ErrorHandlerVisibilityHelper.checkVisibilityTimeout(1));
 		assertThatThrownBy(() -> ErrorHandlerVisibilityHelper.checkVisibilityTimeout(0))
-			.isInstanceOf(IllegalArgumentException.class)
-			.hasMessageContaining("Should be greater than 0");
+				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Should be greater than 0");
 
-		assertThatThrownBy(() -> ErrorHandlerVisibilityHelper.checkVisibilityTimeout(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS + 1))
-			.isInstanceOf(IllegalArgumentException.class)
-			.hasMessageContaining("Should be less than or equal to " + Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
+		assertThatThrownBy(() -> ErrorHandlerVisibilityHelper
+				.checkVisibilityTimeout(Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS + 1))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Should be less than or equal to " + Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS);
 	}
 
 	@ParameterizedTest
