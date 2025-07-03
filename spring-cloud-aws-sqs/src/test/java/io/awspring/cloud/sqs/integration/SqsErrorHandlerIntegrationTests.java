@@ -24,7 +24,6 @@ import io.awspring.cloud.sqs.annotation.SqsListener;
 import io.awspring.cloud.sqs.config.SqsBootstrapConfiguration;
 import io.awspring.cloud.sqs.config.SqsMessageListenerContainerFactory;
 import io.awspring.cloud.sqs.listener.SqsHeaders;
-import io.awspring.cloud.sqs.listener.Visibility;
 import io.awspring.cloud.sqs.listener.errorhandler.*;
 import io.awspring.cloud.sqs.operations.SqsTemplate;
 import java.time.Duration;
@@ -81,10 +80,15 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 	static final String SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_FACTORY = "success_exponential_full_jitter_backoff_error_handler_factory";
 
 	static final String SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE = "success_exponential_half_jitter_backoff_error_handler";
-
 	static final String SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_FACTORY = "success_exponential_half_jitter_backoff_error_handler_factory";
+	static final String SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE = "success_exponential_full_jitter_backoff_error_handler_batch";
 
+	static final String SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE = "success_exponential_half_jitter_backoff_error_handler_batch";
 
+	static final String SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_BATCH_QUEUE = "success_linear_backoff_error_handler_batch";
+	static final String SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_QUEUE = "success_linear_backoff_error_handler";
+
+	static final String SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_FACTORY = "success_linear_backoff_error_handler_factory";
 
 	@BeforeAll
 	static void beforeTests() {
@@ -96,8 +100,11 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 						singletonMap(QueueAttributeName.VISIBILITY_TIMEOUT, "500")),
 				createQueue(client, SUCCESS_EXPONENTIAL_BACKOFF_ERROR_HANDLER_QUEUE_NAME),
 				createQueue(client, SUCCESS_EXPONENTIAL_BACKOFF_ERROR_HANDLER_BATCH_QUEUE_NAME),
-			createQueue(client, SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE),
-			createQueue(client, SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE)).join();
+				createQueue(client, SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE),
+				createQueue(client, SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE),
+				createQueue(client, SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE),
+				createQueue(client, SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE),
+				createQueue(client, SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_BATCH_QUEUE)).join();
 	}
 
 	@Autowired
@@ -131,6 +138,16 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 	}
 
 	@Test
+	void receivesMessageLinearBackOffErrorHandler() throws Exception {
+		String messageBody = UUID.randomUUID().toString();
+		sqsTemplate.send(SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
+		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_QUEUE,
+				messageBody);
+
+		assertThat(latchContainer.receivesRetryMessageLinearlyLatch.await(30, TimeUnit.SECONDS)).isTrue();
+	}
+
+	@Test
 	void receivesMessageExponentialBackOffErrorHandler() throws Exception {
 		String messageBody = UUID.randomUUID().toString();
 		sqsTemplate.send(SUCCESS_EXPONENTIAL_BACKOFF_ERROR_HANDLER_QUEUE_NAME, messageBody);
@@ -139,12 +156,13 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 
 		assertThat(latchContainer.receivesRetryMessageExponentiallyLatch.await(20, TimeUnit.SECONDS)).isTrue();
 	}
-@Test
+
+	@Test
 	void receivesMessageExponentialFullJitterBackOffErrorHandler() throws Exception {
 		String messageBody = UUID.randomUUID().toString();
 		sqsTemplate.send(SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
 		logger.debug("Sent message to queue {} with messageBody {}",
-			SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
+				SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
 
 		assertThat(latchContainer.receivesRetryMessageFullJitterLatch.await(72, TimeUnit.SECONDS)).isTrue();
 	}
@@ -154,12 +172,10 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		String messageBody = UUID.randomUUID().toString();
 		sqsTemplate.send(SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
 		logger.debug("Sent message to queue {} with messageBody {}",
-			SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
+				SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, messageBody);
 
 		assertThat(latchContainer.receivesRetryMessageHalfJitterLatch.await(64, TimeUnit.SECONDS)).isTrue();
 	}
-
-
 
 	@Test
 	void receivesBatchMessageExponentialBackOffErrorHandler() throws Exception {
@@ -170,6 +186,41 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 				SUCCESS_EXPONENTIAL_BACKOFF_ERROR_HANDLER_BATCH_QUEUE_NAME, messages);
 
 		assertThat(latchContainer.receivesRetryBatchMessageExponentiallyLatch.await(35, TimeUnit.SECONDS)).isTrue();
+	}
+
+	@Test
+	void receivesBatchMessageExponentialFullJitterBackOffErrorHandler() throws Exception {
+		List<Message<String>> messages = create10Messages(
+				"receivesBatchMessageExponentialFullJitterBackOffErrorHandler");
+
+		sqsTemplate.sendManyAsync(SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messages);
+		logger.debug("Sent message to queue {} with messageBody {}",
+				SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messages);
+
+		assertThat(latchContainer.receivesRetryBatchMessageFullJitterLatch.await(72, TimeUnit.SECONDS)).isTrue();
+	}
+
+	@Test
+	void receivesBatchMessageExponentialHalfJitterBackOffErrorHandler() throws Exception {
+		List<Message<String>> messages = create10Messages(
+				"receivesBatchMessageExponentialHalfJitterBackOffErrorHandler");
+
+		sqsTemplate.sendManyAsync(SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messages);
+		logger.debug("Sent message to queue {} with messageBody {}",
+				SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messages);
+
+		assertThat(latchContainer.receivesRetryBatchMessageHalfJitterLatch.await(64, TimeUnit.SECONDS)).isTrue();
+	}
+
+	@Test
+	void receivesBatchMessageLinearBackOffErrorHandler() throws Exception {
+		List<Message<String>> messages = create10Messages("receivesBatchMessageLinearBackOffErrorHandler");
+
+		sqsTemplate.sendManyAsync(SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messages);
+		logger.debug("Sent message to queue {} with messageBody {}", SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_BATCH_QUEUE,
+				messages);
+
+		assertThat(latchContainer.receivesRetryBatchMessageLinearlyLatch.await(30, TimeUnit.SECONDS)).isTrue();
 	}
 
 	static class ImmediateRetryAsyncErrorHandlerListener {
@@ -276,8 +327,7 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		static Integer initialValueSeconds = 2;
 		long firstReceiveTimestamp;
 
-		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE,
-			factory = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialFullJitterErrorHandler")
+		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, factory = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialFullJitterErrorHandler")
 		CompletableFuture<Void> listen(Message<String> message,
 				@Header(SqsHeaders.SQS_QUEUE_NAME_HEADER) String queueName) {
 			logger.info("Received message {} from queue {}", message, queueName);
@@ -303,9 +353,7 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 			return CompletableFuture.completedFuture(null);
 		}
 
-
-		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE,
-			factory = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialHalfJitterErrorHandler")
+		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_QUEUE, factory = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialHalfJitterErrorHandler")
 		CompletableFuture<Void> listenHalf(Message<String> message,
 				@Header(SqsHeaders.SQS_QUEUE_NAME_HEADER) String queueName) {
 			logger.info("Received message {} from queue {}", message, queueName);
@@ -326,6 +374,40 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 			long expectedElapsedTime = calculateJitterTotalElapsedExpectedTime(receiveCount);
 			if (elapsedTimeBetweenMessageReceivesInSeconds >= expectedElapsedTime) {
 				latchContainer.receivesRetryMessageHalfJitterLatch.countDown();
+			}
+
+			return CompletableFuture.completedFuture(null);
+		}
+	}
+
+	static class LinearBackOffErrorHandlerListener {
+		@Autowired
+		LatchContainer latchContainer;
+		static int increment = 2;
+		static int initialValueSeconds = 2;
+		long firstReceiveTimestamp;
+
+		@SqsListener(queueNames = SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_QUEUE, factory = SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityLinearErrorHandler")
+		CompletableFuture<Void> listen(Message<String> message,
+				@Header(SqsHeaders.SQS_QUEUE_NAME_HEADER) String queueName) {
+			logger.info("Received message {} from queue {}", message, queueName);
+
+			long receiveCount = Long.parseLong(MessageHeaderUtils.getHeader(message,
+					SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class));
+
+			if (receiveCount < 5) {
+				return CompletableFuture
+						.failedFuture(new RuntimeException("Expected exception from visibilityLinearErrorHandler"));
+			}
+
+			firstReceiveTimestamp = Long.parseLong(MessageHeaderUtils.getHeader(message,
+					SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_FIRST_RECEIVE_TIMESTAMP, String.class));
+			long currentTimestamp = MessageHeaderUtils.getHeader(message, MessageHeaders.TIMESTAMP, Long.class);
+
+			long elapsedTimeBetweenMessageReceivesInSeconds = (currentTimestamp - firstReceiveTimestamp) / 1000;
+			long expectedElapsedTime = calculateLinearTotalElapsedExpectedTime(receiveCount);
+			if (elapsedTimeBetweenMessageReceivesInSeconds >= expectedElapsedTime) {
+				latchContainer.receivesRetryMessageLinearlyLatch.countDown();
 			}
 
 			return CompletableFuture.completedFuture(null);
@@ -373,6 +455,117 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		}
 	}
 
+	static class ExponentialBackOffFullJitterBatchErrorHandlerListener {
+		@Autowired
+		LatchContainer latchContainer;
+
+		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messageVisibilitySeconds = "10", factory = SUCCESS_EXPONENTIAL_FULL_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialFullJitterBatchErrorHandler")
+		CompletableFuture<Void> listen(List<Message<String>> messages) {
+			logger.debug("Received messages {} from queue {}", MessageHeaderUtils.getId(messages),
+					messages.get(0).getHeaders().get(SqsHeaders.SQS_QUEUE_NAME_HEADER));
+
+			Collection<String> messagesReceiveCount = MessageHeaderUtils.getHeader(messages,
+					SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class);
+
+			boolean anyIsUnderRetryCount = messagesReceiveCount.stream()
+					.anyMatch(messageReceiveCount -> Long.parseLong(messageReceiveCount) < 7);
+
+			if (anyIsUnderRetryCount) {
+				return CompletableFuture.failedFuture(new RuntimeException(
+						"Expected exception from visibilityExponentialFullJitterBatchErrorHandler"));
+			}
+
+			for (Message<String> message : messages) {
+				long receiveCount = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class));
+				long firstReceiveTimestamp = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_FIRST_RECEIVE_TIMESTAMP, String.class));
+				long currentTimestamp = MessageHeaderUtils.getHeader(message, MessageHeaders.TIMESTAMP, Long.class);
+				long elapsedTimeBetweenMessageReceivesInSeconds = (currentTimestamp - firstReceiveTimestamp) / 1000;
+				long expectedElapsedTime = calculateJitterTotalElapsedExpectedTime(receiveCount);
+				if (elapsedTimeBetweenMessageReceivesInSeconds >= expectedElapsedTime) {
+					latchContainer.receivesRetryBatchMessageFullJitterLatch.countDown();
+				}
+			}
+
+			return CompletableFuture.completedFuture(null);
+		}
+	}
+
+	static class ExponentialBackOffHalfJitterBatchErrorHandlerListener {
+		@Autowired
+		LatchContainer latchContainer;
+
+		@SqsListener(queueNames = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, messageVisibilitySeconds = "10", factory = SUCCESS_EXPONENTIAL_HALF_JITTER_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityExponentialHalfJitterBatchErrorHandler")
+		CompletableFuture<Void> listen(List<Message<String>> messages) {
+			logger.debug("Received messages {} from queue {}", MessageHeaderUtils.getId(messages),
+					messages.get(0).getHeaders().get(SqsHeaders.SQS_QUEUE_NAME_HEADER));
+
+			Collection<String> messagesReceiveCount = MessageHeaderUtils.getHeader(messages,
+					SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class);
+
+			boolean anyIsUnderRetryCount = messagesReceiveCount.stream()
+					.anyMatch(messageReceiveCount -> Long.parseLong(messageReceiveCount) < 6);
+
+			if (anyIsUnderRetryCount) {
+				return CompletableFuture.failedFuture(new RuntimeException(
+						"Expected exception from visibilityExponentialHalfJitterBatchErrorHandler"));
+			}
+
+			for (Message<String> message : messages) {
+				long receiveCount = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class));
+				long firstReceiveTimestamp = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_FIRST_RECEIVE_TIMESTAMP, String.class));
+				long currentTimestamp = MessageHeaderUtils.getHeader(message, MessageHeaders.TIMESTAMP, Long.class);
+				long elapsedTimeBetweenMessageReceivesInSeconds = (currentTimestamp - firstReceiveTimestamp) / 1000;
+				long expectedElapsedTime = calculateJitterTotalElapsedExpectedTime(receiveCount);
+				if (elapsedTimeBetweenMessageReceivesInSeconds >= expectedElapsedTime) {
+					latchContainer.receivesRetryBatchMessageHalfJitterLatch.countDown();
+				}
+			}
+
+			return CompletableFuture.completedFuture(null);
+		}
+	}
+
+	static class LinearBackOffBatchErrorHandlerListener {
+		@Autowired
+		LatchContainer latchContainer;
+
+		@SqsListener(queueNames = SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_BATCH_QUEUE, factory = SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_FACTORY, id = "visibilityLinearBatchErrorHandler")
+		CompletableFuture<Void> listen(List<Message<String>> messages) {
+			logger.debug("Received messages {} from queue {}", MessageHeaderUtils.getId(messages),
+					messages.get(0).getHeaders().get(SqsHeaders.SQS_QUEUE_NAME_HEADER));
+
+			Collection<String> messagesReceiveCount = MessageHeaderUtils.getHeader(messages,
+					SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class);
+
+			boolean anyIsUnderRetryCount = messagesReceiveCount.stream()
+					.anyMatch(messageReceiveCount -> Long.parseLong(messageReceiveCount) < 5);
+
+			if (anyIsUnderRetryCount) {
+				return CompletableFuture.failedFuture(
+						new RuntimeException("Expected exception from visibilityLinearBatchErrorHandler"));
+			}
+
+			for (Message<String> message : messages) {
+				long receiveCount = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_RECEIVE_COUNT, String.class));
+				long firstReceiveTimestamp = Long.parseLong(MessageHeaderUtils.getHeader(message,
+						SqsHeaders.MessageSystemAttributes.SQS_APPROXIMATE_FIRST_RECEIVE_TIMESTAMP, String.class));
+				long currentTimestamp = MessageHeaderUtils.getHeader(message, MessageHeaders.TIMESTAMP, Long.class);
+				long elapsedTimeBetweenMessageReceivesInSeconds = (currentTimestamp - firstReceiveTimestamp) / 1000;
+				long expectedElapsedTime = calculateLinearTotalElapsedExpectedTime(receiveCount);
+				if (elapsedTimeBetweenMessageReceivesInSeconds >= expectedElapsedTime) {
+					latchContainer.receivesRetryBatchMessageLinearlyLatch.countDown();
+				}
+			}
+
+			return CompletableFuture.completedFuture(null);
+		}
+	}
+
 	static class LatchContainer {
 		final CountDownLatch receivesRetryMessageQuicklyLatch = new CountDownLatch(1);
 		final CountDownLatch receivesRetryBatchMessageQuicklyLatch = new CountDownLatch(10);
@@ -380,6 +573,11 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		final CountDownLatch receivesRetryBatchMessageExponentiallyLatch = new CountDownLatch(10);
 		final CountDownLatch receivesRetryMessageFullJitterLatch = new CountDownLatch(1);
 		final CountDownLatch receivesRetryMessageHalfJitterLatch = new CountDownLatch(1);
+		final CountDownLatch receivesRetryMessageLinearlyLatch = new CountDownLatch(1);
+
+		final CountDownLatch receivesRetryBatchMessageFullJitterLatch = new CountDownLatch(10);
+		final CountDownLatch receivesRetryBatchMessageHalfJitterLatch = new CountDownLatch(10);
+		final CountDownLatch receivesRetryBatchMessageLinearlyLatch = new CountDownLatch(10);
 	}
 
 	@Import(SqsBootstrapConfiguration.class)
@@ -465,6 +663,26 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		}
 		// @formatter:on
 
+		//@formatter:off
+		@Bean(name = SUCCESS_LINEAR_BACKOFF_ERROR_HANDLER_FACTORY)
+		public SqsMessageListenerContainerFactory<Object> linearBackOffErrorHandler() {
+			return SqsMessageListenerContainerFactory
+				.builder()
+				.configure(options -> options
+					.maxConcurrentMessages(10)
+					.pollTimeout(Duration.ofSeconds(15))
+					.maxMessagesPerPoll(10)
+					.queueAttributeNames(Collections.singletonList(QueueAttributeName.QUEUE_ARN))
+					.maxDelayBetweenPolls(Duration.ofSeconds(15)))
+				.errorHandler(LinearBackoffErrorHandler.builder()
+					.initialVisibilityTimeoutSeconds(LinearBackOffErrorHandlerListener.initialValueSeconds)
+					.increment(LinearBackOffErrorHandlerListener.increment)
+					.build())
+				.sqsAsyncClientSupplier(BaseSqsIntegrationTest::createAsyncClient)
+				.build();
+		}
+		// @formatter:on
+
 		@Bean
 		ImmediateRetryAsyncErrorHandlerListener immediateRetryAsyncErrorHandlerListener() {
 			return new ImmediateRetryAsyncErrorHandlerListener();
@@ -488,6 +706,26 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 		@Bean
 		ExponentialBackOffJitterErrorHandlerListener exponentialBackOffJitterErrorHandlerListener() {
 			return new ExponentialBackOffJitterErrorHandlerListener();
+		}
+
+		@Bean
+		ExponentialBackOffFullJitterBatchErrorHandlerListener exponentialBackOffFullJitterBatchErrorHandlerListener() {
+			return new ExponentialBackOffFullJitterBatchErrorHandlerListener();
+		}
+
+		@Bean
+		ExponentialBackOffHalfJitterBatchErrorHandlerListener exponentialBackOffHalfJitterBatchErrorHandlerListener() {
+			return new ExponentialBackOffHalfJitterBatchErrorHandlerListener();
+		}
+
+		@Bean
+		LinearBackOffBatchErrorHandlerListener linearBackOffBatchErrorHandlerListener() {
+			return new LinearBackOffBatchErrorHandlerListener();
+		}
+
+		@Bean
+		LinearBackOffErrorHandlerListener linearBackOffErrorHandlerListener() {
+			return new LinearBackOffErrorHandlerListener();
 		}
 
 		LatchContainer latchContainer = new LatchContainer();
@@ -524,9 +762,18 @@ public class SqsErrorHandlerIntegrationTests extends BaseSqsIntegrationTest {
 	private static long calculateJitterTotalElapsedExpectedTime(long receiveCount) {
 		double sum = 0;
 		for (int i = 0; i < receiveCount - 1; i++) {
-			sum += Math.pow(ExponentialBackOffJitterErrorHandlerListener.multiplier, i) /2;
+			sum += Math.pow(ExponentialBackOffJitterErrorHandlerListener.multiplier, i) / 2;
 		}
 		return (long) (ExponentialBackOffJitterErrorHandlerListener.initialValueSeconds * sum);
+	}
+
+	private static long calculateLinearTotalElapsedExpectedTime(long receiveCount) {
+		long sum = 0;
+		for (int i = 0; i < receiveCount - 1; i++) {
+			sum += LinearBackOffErrorHandlerListener.initialValueSeconds
+					+ (long) LinearBackOffErrorHandlerListener.increment * i;
+		}
+		return sum;
 	}
 
 	static class MockedRandomNextInt extends Random {

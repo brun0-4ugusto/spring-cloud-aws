@@ -33,5 +33,10 @@ public class BackoffVisibilityConstants {
 	 * The default multiplier, which doubles the visibility timeout.
 	 */
 	static final double DEFAULT_MULTIPLIER = 2.0;
+	/**
+	 * The default increment used by {@link LinearBackoffErrorHandler}.
+	 */
+	static final int DEFAULT_INCREMENT = (int) DEFAULT_MULTIPLIER;
+
 	static final int DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS = Visibility.MAX_VISIBILITY_TIMEOUT_SECONDS;
 }

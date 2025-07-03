@@ -128,6 +128,7 @@ public class ExponentialBackoffErrorHandlerWithHalfJitter<T> implements AsyncErr
 		private Supplier<Random> randomSupplier = ThreadLocalRandom::current;
 
 		public ExponentialBackoffErrorHandlerWithHalfJitter.Builder<T> randomSupplier(Supplier<Random> randomSupplier) {
+			Assert.notNull(randomSupplier, "randomSupplier cannot be null");
 			this.randomSupplier = randomSupplier;
 			return this;
 		}

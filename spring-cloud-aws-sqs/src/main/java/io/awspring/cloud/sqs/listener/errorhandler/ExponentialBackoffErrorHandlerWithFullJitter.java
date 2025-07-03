@@ -147,6 +147,7 @@ public class ExponentialBackoffErrorHandlerWithFullJitter<T> implements AsyncErr
 		}
 
 		public ExponentialBackoffErrorHandlerWithFullJitter.Builder<T> randomSupplier(Supplier<Random> randomSupplier) {
+			Assert.notNull(randomSupplier, "randomSupplier cannot be null");
 			this.randomSupplier = randomSupplier;
 			return this;
 		}

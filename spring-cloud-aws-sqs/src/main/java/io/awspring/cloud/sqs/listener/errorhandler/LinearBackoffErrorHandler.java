@@ -113,7 +113,7 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 	public static class Builder<T> {
 
 		private int initialVisibilityTimeoutSeconds = BackoffVisibilityConstants.DEFAULT_INITIAL_VISIBILITY_TIMEOUT_SECONDS;
-		private int increment = (int) BackoffVisibilityConstants.DEFAULT_MULTIPLIER;
+		private int increment = BackoffVisibilityConstants.DEFAULT_INCREMENT;
 		private int maxVisibilityTimeoutSeconds = BackoffVisibilityConstants.DEFAULT_MAX_VISIBILITY_TIMEOUT_SECONDS;
 
 		public Builder<T> initialVisibilityTimeoutSeconds(int initialVisibilityTimeoutSeconds) {
@@ -138,8 +138,8 @@ public class LinearBackoffErrorHandler<T> implements AsyncErrorHandler<T> {
 		public LinearBackoffErrorHandler<T> build() {
 			Assert.isTrue(initialVisibilityTimeoutSeconds <= maxVisibilityTimeoutSeconds,
 					"Initial visibility timeout must not exceed max visibility timeout");
-			return new LinearBackoffErrorHandler<T>(initialVisibilityTimeoutSeconds, increment,
-					maxVisibilityTimeoutSeconds);
+			return new LinearBackoffErrorHandler<>(initialVisibilityTimeoutSeconds, increment,
+				maxVisibilityTimeoutSeconds);
 		}
 	}
 }
