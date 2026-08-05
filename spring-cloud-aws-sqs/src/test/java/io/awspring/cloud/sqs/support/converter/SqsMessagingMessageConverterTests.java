@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
+import com.fasterxml.jackson.annotation.JsonView;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Objects;
@@ -181,6 +182,41 @@ class SqsMessagingMessageConverterTests {
 				wrapper -> assertThat(wrapper.value()).isEqualTo(new NestedPojo("batch-value")));
 	}
 
+	@Test
+	void shouldDeserializeNestedGenericWrapperUsingListenerMethodConversionHint() throws Exception {
+		Method listenerMethod = GenericListener.class.getDeclaredMethod("listenToNestedWrapper", GenericWrapper.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		SqsMessagingMessageConverter converter = new SqsMessagingMessageConverter();
+		SqsMessageConversionContext context = createConversionContext(GenericWrapper.class, conversionHint);
+		Message message = Message.builder().body("""
+				{"value":[{"name":"first"},{"name":"second"}]}
+				""").messageId(UUID.randomUUID().toString()).build();
+
+		org.springframework.messaging.Message<?> result = converter.toMessagingMessage(message, context);
+
+		assertThat(result.getPayload()).isInstanceOfSatisfying(GenericWrapper.class,
+				wrapper -> assertThat(wrapper.value())
+						.isEqualTo(List.of(new NestedPojo("first"), new NestedPojo("second"))));
+	}
+
+	@Test
+	void shouldApplyJsonViewFromListenerMethodConversionHint() throws Exception {
+		Method listenerMethod = JsonViewListener.class.getDeclaredMethod("listen", ViewPojo.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		SqsMessagingMessageConverter converter = new SqsMessagingMessageConverter();
+		SqsMessageConversionContext context = createConversionContext(ViewPojo.class, conversionHint);
+		Message message = Message.builder().body("""
+				{"visible":"included","hidden":"excluded"}
+				""").messageId(UUID.randomUUID().toString()).build();
+
+		org.springframework.messaging.Message<?> result = converter.toMessagingMessage(message, context);
+
+		assertThat(result.getPayload()).isInstanceOfSatisfying(ViewPojo.class, payload -> {
+			assertThat(payload.getVisible()).isEqualTo("included");
+			assertThat(payload.getHidden()).isNull();
+		});
+	}
+
 	private SqsMessageConversionContext createConversionContext(Class<?> payloadClass, Object conversionHint) {
 		SqsMessageConversionContext context = new SqsMessageConversionContext();
 		context.setPayloadClass(payloadClass);
@@ -199,6 +235,22 @@ class SqsMessagingMessageConverterTests {
 		void listenToBatch(List<GenericWrapper<NestedPojo>> payload) {
 		}
 
+		void listenToNestedWrapper(GenericWrapper<List<NestedPojo>> payload) {
+		}
+
+	}
+
+	static class JsonViewListener {
+
+		void listen(@JsonView(PublicView.class) ViewPojo payload) {
+		}
+
+	}
+
+	interface PublicView {
+	}
+
+	interface InternalView {
 	}
 
 	record GenericWrapper<T>(T value)
@@ -206,6 +258,32 @@ class SqsMessagingMessageConverterTests {
 	}
 
 	record NestedPojo(String name) {
+	}
+
+	static class ViewPojo {
+
+		@JsonView(PublicView.class)
+		private String visible;
+
+		@JsonView(InternalView.class)
+		private String hidden;
+
+		public String getVisible() {
+			return this.visible;
+		}
+
+		public void setVisible(String visible) {
+			this.visible = visible;
+		}
+
+		public String getHidden() {
+			return this.hidden;
+		}
+
+		public void setHidden(String hidden) {
+			this.hidden = hidden;
+		}
+
 	}
 
 	static class RecordingSmartMessageConverter implements SmartMessageConverter {

@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.core.BridgeMethodResolver;
 import org.springframework.core.MethodParameter;
 import org.springframework.messaging.handler.annotation.support.MessageHandlerMethodFactory;
@@ -214,7 +215,8 @@ public abstract class AbstractEndpoint implements HandlerMethodEndpoint {
 			MethodPayloadMetadata payloadMetadata = this.methodPayloadTypeInferrer.inferPayloadMetadata(this.method,
 					this.argumentResolvers);
 			if (payloadMetadata != null) {
-				amlc.setPayloadDeserializationType(payloadMetadata.payloadClass(), payloadMetadata.conversionHint());
+				amlc.setPayloadDeserializationType(payloadMetadata.payloadClass(),
+						adaptConversionHintToTargetBean(payloadMetadata.conversionHint()));
 			}
 			disableDefaultPayloadTypeMapper(amlc);
 		}
@@ -225,6 +227,21 @@ public abstract class AbstractEndpoint implements HandlerMethodEndpoint {
 		else {
 			container.setMessageListener(createMessageListenerInstance(handlerMethod));
 		}
+	}
+
+	/**
+	 * Adapt a {@link MethodParameter} conversion hint to the concrete listener bean type. Methods inherited from generic
+	 * superclasses expose their payload in terms of the declaring class type variables, such as {@code Wrapper<T>}.
+	 * Setting the concrete target class as the containing class allows Spring's generic type resolution to substitute the
+	 * actual binding, such as {@code T -> TestEvent}, while preserving the parameter's annotations and nesting level.
+	 * {@link AopUtils#getTargetClass(Object)} avoids using a JDK or CGLIB proxy class as the generic resolution context.
+	 * @param conversionHint the inferred conversion hint
+	 * @return a hint using the concrete listener type, or the original hint when it is not a method parameter
+	 */
+	@Nullable
+	private Object adaptConversionHintToTargetBean(@Nullable Object conversionHint) {
+		return conversionHint instanceof MethodParameter methodParameter
+				? methodParameter.withContainingClass(AopUtils.getTargetClass(this.bean)) : conversionHint;
 	}
 
 	private void disableDefaultPayloadTypeMapper(AbstractMessageListenerContainer<?, ?, ?> container) {

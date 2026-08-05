@@ -15,7 +15,9 @@
  */
 package io.awspring.cloud.sqs.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,10 +29,15 @@ import io.awspring.cloud.sqs.support.converter.AbstractMessagingMessageConverter
 import io.awspring.cloud.sqs.support.converter.MessagingMessageConverter;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.List;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.core.GenericTypeResolver;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.ResolvableType;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.support.MessageHandlerMethodFactory;
 import org.springframework.messaging.handler.invocation.InvocableHandlerMethod;
 
@@ -133,7 +140,49 @@ class AbstractEndpointTest {
 
 		endpoint.setupContainer(container);
 
-		verify(container).setPayloadDeserializationType(String.class, conversionHint);
+		MethodParameter configuredHint = captureConversionHint(String.class);
+		assertThat(configuredHint.getMethod()).isEqualTo(method);
+		assertThat(configuredHint.getParameterIndex()).isZero();
+		assertThat(configuredHint.getContainingClass()).isEqualTo(TestListener.class);
+	}
+
+	@Test
+	void shouldUseTargetBeanClassAsContainingClassForInheritedGenericPayload() throws Exception {
+		Method method = GenericListener.class.getMethod("handleMessage", GenericWrapper.class);
+		MethodParameter conversionHint = new MethodParameter(method, 0);
+		endpoint.setBean(new TestEventListener());
+		endpoint.setMethod(method);
+		endpoint.setMethodPayloadTypeInferrer(inferrer);
+		when(inferrer.inferPayloadMetadata(any(Method.class), any()))
+				.thenReturn(new MethodPayloadMetadata(GenericWrapper.class, conversionHint));
+
+		endpoint.setupContainer(container);
+
+		MethodParameter configuredHint = captureConversionHint(GenericWrapper.class);
+		ResolvableType resolvedType = resolveNestedType(configuredHint);
+		assertThat(configuredHint.getContainingClass()).isEqualTo(TestEventListener.class);
+		assertThat(resolvedType.getRawClass()).isEqualTo(GenericWrapper.class);
+		assertThat(resolvedType.getGeneric(0).resolve()).isEqualTo(TestEvent.class);
+	}
+
+	@Test
+	void shouldPreserveNestingLevelWhenUsingTargetBeanClassForInheritedGenericBatchPayload() throws Exception {
+		Method method = GenericBatchListener.class.getMethod("handleMessages", List.class);
+		MethodParameter conversionHint = new MethodParameter(method, 0).nested().nested();
+		endpoint.setBean(new TestEventBatchListener());
+		endpoint.setMethod(method);
+		endpoint.setMethodPayloadTypeInferrer(inferrer);
+		when(inferrer.inferPayloadMetadata(any(Method.class), any()))
+				.thenReturn(new MethodPayloadMetadata(GenericWrapper.class, conversionHint));
+
+		endpoint.setupContainer(container);
+
+		MethodParameter configuredHint = captureConversionHint(GenericWrapper.class);
+		ResolvableType resolvedType = resolveNestedType(configuredHint);
+		assertThat(configuredHint.getContainingClass()).isEqualTo(TestEventBatchListener.class);
+		assertThat(configuredHint.getNestingLevel()).isEqualTo(3);
+		assertThat(resolvedType.getRawClass()).isEqualTo(GenericWrapper.class);
+		assertThat(resolvedType.getGeneric(0).resolve()).isEqualTo(TestEvent.class);
 	}
 
 	@Test
@@ -169,10 +218,44 @@ class AbstractEndpointTest {
 		verify(converter, never()).setPayloadTypeMapper(any());
 	}
 
+	private MethodParameter captureConversionHint(Class<?> payloadClass) {
+		ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+		verify(container).setPayloadDeserializationType(eq(payloadClass), captor.capture());
+		assertThat(captor.getValue()).isInstanceOf(MethodParameter.class);
+		return (MethodParameter) captor.getValue();
+	}
+
+	private ResolvableType resolveNestedType(MethodParameter parameter) {
+		return ResolvableType.forType(GenericTypeResolver.resolveType(parameter.getNestedGenericParameterType(),
+				parameter.getContainingClass()));
+	}
+
 	static class TestListener {
 		public void handleMessage(String message) {
 			// test method
 		}
+	}
+
+	abstract static class GenericListener<T> {
+		public void handleMessage(GenericWrapper<T> message) {
+		}
+	}
+
+	static class TestEventListener extends GenericListener<TestEvent> {
+	}
+
+	abstract static class GenericBatchListener<T> {
+		public void handleMessages(List<Message<GenericWrapper<T>>> messages) {
+		}
+	}
+
+	static class TestEventBatchListener extends GenericBatchListener<TestEvent> {
+	}
+
+	static class GenericWrapper<T> {
+	}
+
+	static class TestEvent {
 	}
 
 }

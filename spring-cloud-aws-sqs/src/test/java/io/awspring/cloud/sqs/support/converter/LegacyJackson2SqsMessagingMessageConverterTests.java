@@ -22,10 +22,12 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.annotation.JsonView;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.support.converter.legacy.LegacyJackson2SqsMessagingMessageConverter;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -177,11 +179,66 @@ class LegacyJackson2SqsMessagingMessageConverterTests {
 						pojo -> assertThat(pojo.getMyProperty()).isEqualTo("nested-value")));
 	}
 
+	@Test
+	void shouldDeserializeNestedGenericWrapperUsingListenerMethodConversionHint() throws Exception {
+		Method listenerMethod = GenericListener.class.getDeclaredMethod("listenToNestedWrapper", GenericWrapper.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		LegacyJackson2SqsMessagingMessageConverter converter = new LegacyJackson2SqsMessagingMessageConverter();
+		SqsMessageConversionContext context = new SqsMessageConversionContext();
+		context.setPayloadClass(GenericWrapper.class);
+		context.setConversionHint(conversionHint);
+		Message message = Message.builder().body("""
+				{"value":[{"myProperty":"first"},{"myProperty":"second"}]}
+				""").messageId(UUID.randomUUID().toString()).build();
+
+		org.springframework.messaging.Message<?> result = converter.toMessagingMessage(message, context);
+
+		assertThat(result.getPayload()).isInstanceOfSatisfying(GenericWrapper.class,
+				wrapper -> assertThat(wrapper.getValue())
+						.isEqualTo(List.of(new MyPojo("first"), new MyPojo("second"))));
+	}
+
+	@Test
+	void shouldApplyJsonViewFromListenerMethodConversionHint() throws Exception {
+		Method listenerMethod = JsonViewListener.class.getDeclaredMethod("listen", ViewPojo.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		LegacyJackson2SqsMessagingMessageConverter converter = new LegacyJackson2SqsMessagingMessageConverter();
+		SqsMessageConversionContext context = new SqsMessageConversionContext();
+		context.setPayloadClass(ViewPojo.class);
+		context.setConversionHint(conversionHint);
+		Message message = Message.builder().body("""
+				{"visible":"included","hidden":"excluded"}
+				""").messageId(UUID.randomUUID().toString()).build();
+
+		org.springframework.messaging.Message<?> result = converter.toMessagingMessage(message, context);
+
+		assertThat(result.getPayload()).isInstanceOfSatisfying(ViewPojo.class, payload -> {
+			assertThat(payload.getVisible()).isEqualTo("included");
+			assertThat(payload.getHidden()).isNull();
+		});
+	}
+
 	static class GenericListener {
 
 		void listen(GenericWrapper<MyPojo> payload) {
 		}
 
+		void listenToNestedWrapper(GenericWrapper<List<MyPojo>> payload) {
+		}
+
+	}
+
+	static class JsonViewListener {
+
+		void listen(@JsonView(PublicView.class) ViewPojo payload) {
+		}
+
+	}
+
+	interface PublicView {
+	}
+
+	interface InternalView {
 	}
 
 	static class GenericWrapper<T> {
@@ -201,6 +258,13 @@ class LegacyJackson2SqsMessagingMessageConverterTests {
 	static class MyPojo {
 
 		private String myProperty = "myValue";
+
+		MyPojo() {
+		}
+
+		MyPojo(String myProperty) {
+			this.myProperty = myProperty;
+		}
 
 		public String getMyProperty() {
 			return this.myProperty;
@@ -224,6 +288,32 @@ class LegacyJackson2SqsMessagingMessageConverterTests {
 		public int hashCode() {
 			return myProperty != null ? myProperty.hashCode() : 0;
 		}
+	}
+
+	static class ViewPojo {
+
+		@JsonView(PublicView.class)
+		private String visible;
+
+		@JsonView(InternalView.class)
+		private String hidden;
+
+		public String getVisible() {
+			return this.visible;
+		}
+
+		public void setVisible(String visible) {
+			this.visible = visible;
+		}
+
+		public String getHidden() {
+			return this.hidden;
+		}
+
+		public void setHidden(String hidden) {
+			this.hidden = hidden;
+		}
+
 	}
 
 }

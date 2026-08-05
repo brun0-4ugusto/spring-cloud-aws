@@ -1787,6 +1787,8 @@ The inference supports simple types, generic types like `List<MyEvent>`, `Messag
 Parameters annotated with `@Payload` are explicitly recognized as the payload parameter.
 
 Generic type information is provided to payload converters through the `SmartMessageConverter` conversion hint.
+For listener methods inherited from generic superclasses, type variables are resolved against the concrete listener bean class.
+Because the conversion hint is the listener `MethodParameter`, smart converters can also use other parameter metadata, such as Jackson's `@JsonView`.
 Custom payload converters that only implement `MessageConverter` continue to receive the inferred raw payload class.
 
 For polymorphic types (interfaces, `Object`, or `@SqsHandler` methods), a custom mapper is required.

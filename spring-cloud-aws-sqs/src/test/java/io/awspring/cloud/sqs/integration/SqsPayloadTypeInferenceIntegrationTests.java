@@ -96,6 +96,12 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 
 	static final String INFERS_GENERIC_WRAPPER_PAYLOAD_QUEUE = "infers_generic_outer_payload_queue";
 
+	static final String INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE = "infers_inherited_generic_outer_payload_queue";
+
+	static final String INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE = "infers_batch_generic_outer_payload_queue";
+
+	static final String INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE = "infers_batch_message_generic_outer_payload_queue";
+
 	static final String MANUAL_ACK_FACTORY = "manualAckFactory";
 
 	static final String CUSTOM_CONVERTER_FACTORY = "customConverterFactory";
@@ -110,7 +116,10 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 				createQueue(client, IGNORES_TYPE_HEADER_QUEUE), createQueue(client, EXPLICIT_PAYLOAD_ANNOTATION_QUEUE),
 				createQueue(client, STRING_PAYLOAD_QUEUE), createQueue(client, CUSTOM_CONVERTER_QUEUE),
 				createQueue(client, ERROR_HANDLER_TEST_QUEUE), createQueue(client, INFERS_MESSAGE_LIST_PAYLOAD_QUEUE),
-				createQueue(client, INFERS_GENERIC_WRAPPER_PAYLOAD_QUEUE)).join();
+				createQueue(client, INFERS_GENERIC_WRAPPER_PAYLOAD_QUEUE),
+				createQueue(client, INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE),
+				createQueue(client, INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE),
+				createQueue(client, INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE)).join();
 	}
 
 	@Autowired
@@ -375,6 +384,68 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 
 	}
 
+	@Test
+	void shouldInferTestEventTypeFromInheritedGenericWrapperListener() throws Exception {
+		CountDownLatch ackLatch = new CountDownLatch(1);
+		ackCallbackPayloadTypeCollector.registerLatch(INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE, ackLatch);
+		GenericWrapperEvent<TestEvent> event = new GenericWrapperEvent<>(
+				new TestEvent("inherited-event-id", "inherited-event-payload"));
+
+		sqsTemplate.send(INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE, event);
+
+		assertThat(latchContainer.infersInheritedGenericWrapperPayloadLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(pojoCollector.receivedInheritedGenericWrapperPayload).containsExactly(event);
+		assertThat(pojoCollector.receivedInheritedGenericWrapperPayload.get(0).testEvent())
+				.isInstanceOf(TestEvent.class);
+		interceptorPayloadTypeCollector.assertPayloadsForQueueContains(INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				event);
+		assertThat(ackLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		ackCallbackPayloadTypeCollector.assertPayloadsForQueueContains(INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				event);
+	}
+
+	@Test
+	void shouldInferTestEventTypeFromBatchOfGenericWrappers() throws Exception {
+		CountDownLatch ackLatch = new CountDownLatch(2);
+		ackCallbackPayloadTypeCollector.registerLatch(INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE, ackLatch);
+		List<GenericWrapperEvent<TestEvent>> events = List.of(
+				new GenericWrapperEvent<>(new TestEvent("batch-wrapper-id-1", "batch-wrapper-payload-1")),
+				new GenericWrapperEvent<>(new TestEvent("batch-wrapper-id-2", "batch-wrapper-payload-2")));
+
+		sqsTemplate.sendMany(INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				events.stream().map(event -> MessageBuilder.withPayload(event).build()).toList());
+
+		assertThat(latchContainer.infersBatchGenericWrapperPayloadLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(pojoCollector.receivedBatchGenericWrapperPayload).containsExactlyInAnyOrderElementsOf(events)
+				.allSatisfy(wrapper -> assertThat(wrapper.testEvent()).isInstanceOf(TestEvent.class));
+		interceptorPayloadTypeCollector.assertPayloadsForQueueContainsAll(INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				events);
+		assertThat(ackLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		ackCallbackPayloadTypeCollector.assertPayloadsForQueueContainsAll(INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				events);
+	}
+
+	@Test
+	void shouldInferTestEventTypeFromBatchOfMessagesWithGenericWrappers() throws Exception {
+		CountDownLatch ackLatch = new CountDownLatch(2);
+		ackCallbackPayloadTypeCollector.registerLatch(INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE, ackLatch);
+		List<GenericWrapperEvent<TestEvent>> events = List.of(
+				new GenericWrapperEvent<>(new TestEvent("batch-message-wrapper-id-1", "batch-message-wrapper-payload-1")),
+				new GenericWrapperEvent<>(new TestEvent("batch-message-wrapper-id-2", "batch-message-wrapper-payload-2")));
+
+		sqsTemplate.sendMany(INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE,
+				events.stream().map(event -> MessageBuilder.withPayload(event).build()).toList());
+
+		assertThat(latchContainer.infersBatchMessageGenericWrapperPayloadLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(pojoCollector.receivedBatchMessageGenericWrapperPayload).containsExactlyInAnyOrderElementsOf(events)
+				.allSatisfy(wrapper -> assertThat(wrapper.testEvent()).isInstanceOf(TestEvent.class));
+		interceptorPayloadTypeCollector.assertPayloadsForQueueContainsAll(
+				INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE, events);
+		assertThat(ackLatch.await(10, TimeUnit.SECONDS)).isTrue();
+		ackCallbackPayloadTypeCollector.assertPayloadsForQueueContainsAll(
+				INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE, events);
+	}
+
 	static class InfersSimplePojoListener {
 
 		@Autowired
@@ -482,6 +553,60 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 			logger.debug("Received message with GenericWrapperEvent<TestEvent> payload: {}", message);
 			pojoCollector.receivedGenericWrapperPayload.add(message);
 			latchContainer.infersGenericWrapperPayloadLatch.countDown();
+		}
+	}
+
+	abstract static class AbstractInheritedGenericWrapperPayloadListener<T> {
+
+		@Autowired
+		LatchContainer latchContainer;
+
+		@Autowired
+		PojoCollector pojoCollector;
+
+		@SqsListener(queueNames = INFERS_INHERITED_GENERIC_WRAPPER_PAYLOAD_QUEUE, id = "infers-inherited-generic-wrapper-payload")
+		void listen(GenericWrapperEvent<T> message) {
+			logger.debug("Received inherited GenericWrapperEvent<T> payload: {}", message);
+			pojoCollector.receivedInheritedGenericWrapperPayload.add(message);
+			latchContainer.infersInheritedGenericWrapperPayloadLatch.countDown();
+		}
+	}
+
+	static class InfersInheritedGenericWrapperPayloadListener
+			extends AbstractInheritedGenericWrapperPayloadListener<TestEvent> {
+	}
+
+	static class InfersBatchGenericWrapperPayloadListener {
+
+		@Autowired
+		LatchContainer latchContainer;
+
+		@Autowired
+		PojoCollector pojoCollector;
+
+		@SqsListener(queueNames = INFERS_BATCH_GENERIC_WRAPPER_PAYLOAD_QUEUE, id = "infers-batch-generic-wrapper-payload")
+		void listen(List<GenericWrapperEvent<TestEvent>> messages) {
+			logger.debug("Received {} GenericWrapperEvent<TestEvent> payloads", messages.size());
+			pojoCollector.receivedBatchGenericWrapperPayload.addAll(messages);
+			messages.forEach(message -> latchContainer.infersBatchGenericWrapperPayloadLatch.countDown());
+		}
+	}
+
+	static class InfersBatchMessageGenericWrapperPayloadListener {
+
+		@Autowired
+		LatchContainer latchContainer;
+
+		@Autowired
+		PojoCollector pojoCollector;
+
+		@SqsListener(queueNames = INFERS_BATCH_MESSAGE_GENERIC_WRAPPER_PAYLOAD_QUEUE, id = "infers-batch-message-generic-wrapper-payload")
+		void listen(List<Message<GenericWrapperEvent<TestEvent>>> messages) {
+			logger.debug("Received {} messages with GenericWrapperEvent<TestEvent> payloads", messages.size());
+			messages.forEach(message -> {
+				pojoCollector.receivedBatchMessageGenericWrapperPayload.add(message.getPayload());
+				latchContainer.infersBatchMessageGenericWrapperPayloadLatch.countDown();
+			});
 		}
 	}
 
@@ -629,6 +754,15 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 
 		final List<GenericWrapperEvent<?>> receivedGenericWrapperPayload = Collections
 				.synchronizedList(new ArrayList<>());
+
+		final List<GenericWrapperEvent<?>> receivedInheritedGenericWrapperPayload = Collections
+				.synchronizedList(new ArrayList<>());
+
+		final List<GenericWrapperEvent<?>> receivedBatchGenericWrapperPayload = Collections
+				.synchronizedList(new ArrayList<>());
+
+		final List<GenericWrapperEvent<?>> receivedBatchMessageGenericWrapperPayload = Collections
+				.synchronizedList(new ArrayList<>());
 	}
 
 	/**
@@ -746,6 +880,12 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 		final CountDownLatch infersMessageListPayloadLatch = new CountDownLatch(1);
 
 		final CountDownLatch infersGenericWrapperPayloadLatch = new CountDownLatch(1);
+
+		final CountDownLatch infersInheritedGenericWrapperPayloadLatch = new CountDownLatch(1);
+
+		final CountDownLatch infersBatchGenericWrapperPayloadLatch = new CountDownLatch(2);
+
+		final CountDownLatch infersBatchMessageGenericWrapperPayloadLatch = new CountDownLatch(2);
 	}
 
 	@Import(SqsBootstrapConfiguration.class)
@@ -977,6 +1117,21 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 		@Bean
 		InfersGenericWrapperPayloadListener infersGenericWrapperPayloadListener() {
 			return new InfersGenericWrapperPayloadListener();
+		}
+
+		@Bean
+		InfersInheritedGenericWrapperPayloadListener infersInheritedGenericWrapperPayloadListener() {
+			return new InfersInheritedGenericWrapperPayloadListener();
+		}
+
+		@Bean
+		InfersBatchGenericWrapperPayloadListener infersBatchGenericWrapperPayloadListener() {
+			return new InfersBatchGenericWrapperPayloadListener();
+		}
+
+		@Bean
+		InfersBatchMessageGenericWrapperPayloadListener infersBatchMessageGenericWrapperPayloadListener() {
+			return new InfersBatchMessageGenericWrapperPayloadListener();
 		}
 
 	}

@@ -148,6 +148,20 @@ class SqsMessageListenerContainerTests {
 	}
 
 	@Test
+	void shouldClearConversionHintWhenPayloadDeserializationTypeIsSetWithoutHint() throws Exception {
+		Method listenerMethod = GenericListener.class.getDeclaredMethod("listen", GenericWrapper.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		TestSqsMessageListenerContainer container = new TestSqsMessageListenerContainer(mock(SqsAsyncClient.class),
+				SqsContainerOptions.builder().build());
+		container.setPayloadDeserializationType(GenericWrapper.class, conversionHint);
+
+		container.setPayloadDeserializationType(String.class);
+
+		assertThat(container.getPayloadDeserializationType()).isEqualTo(String.class);
+		assertThat(container.getPayloadConversionHint()).isNull();
+	}
+
+	@Test
 	void shouldThrowIfWrongCustomExecutor() {
 		SqsAsyncClient client = mock(SqsAsyncClient.class);
 		SqsMessageListenerContainer<Object> container = SqsMessageListenerContainer.builder().sqsAsyncClient(client)
