@@ -359,7 +359,7 @@ class SqsPayloadTypeInferenceIntegrationTests extends BaseSqsIntegrationTest {
 		CountDownLatch ackLatch = new CountDownLatch(1);
 		ackCallbackPayloadTypeCollector.registerLatch(INFERS_GENERIC_WRAPPER_PAYLOAD_QUEUE, ackLatch);
 
-		GenericWrapperEvent<TestEvent> event = new GenericWrapperEvent(new TestEvent("event-id", "event-payload"));
+		GenericWrapperEvent<TestEvent> event = new GenericWrapperEvent<>(new TestEvent("event-id", "event-payload"));
 		sqsTemplate.send(INFERS_GENERIC_WRAPPER_PAYLOAD_QUEUE, event);
 		logger.debug("Sent message GenericWrapperEvent");
 

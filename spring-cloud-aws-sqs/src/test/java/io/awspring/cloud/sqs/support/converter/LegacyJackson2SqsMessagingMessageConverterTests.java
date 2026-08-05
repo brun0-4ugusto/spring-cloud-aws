@@ -24,10 +24,12 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.awspring.cloud.sqs.support.converter.legacy.LegacyJackson2SqsMessagingMessageConverter;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.MethodParameter;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.support.MessageBuilder;
@@ -154,6 +156,46 @@ class LegacyJackson2SqsMessagingMessageConverterTests {
 		SqsMessagingMessageConverter converter = new SqsMessagingMessageConverter();
 		converter.setPayloadTypeHeader("myTypeHeader");
 		assertThat(converter.isUsingDefaultPayloadTypeMapper()).isFalse();
+	}
+
+	@Test
+	void shouldDeserializeGenericWrapperUsingListenerMethodConversionHint() throws Exception {
+		Method listenerMethod = GenericListener.class.getDeclaredMethod("listen", GenericWrapper.class);
+		MethodParameter conversionHint = new MethodParameter(listenerMethod, 0);
+		LegacyJackson2SqsMessagingMessageConverter converter = new LegacyJackson2SqsMessagingMessageConverter();
+		SqsMessageConversionContext context = new SqsMessageConversionContext();
+		context.setPayloadClass(GenericWrapper.class);
+		context.setConversionHint(conversionHint);
+		Message message = Message.builder().body("""
+				{"value":{"myProperty":"nested-value"}}
+				""").messageId(UUID.randomUUID().toString()).build();
+
+		org.springframework.messaging.Message<?> result = converter.toMessagingMessage(message, context);
+
+		assertThat(result.getPayload()).isInstanceOfSatisfying(GenericWrapper.class,
+				wrapper -> assertThat(wrapper.getValue()).isInstanceOfSatisfying(MyPojo.class,
+						pojo -> assertThat(pojo.getMyProperty()).isEqualTo("nested-value")));
+	}
+
+	static class GenericListener {
+
+		void listen(GenericWrapper<MyPojo> payload) {
+		}
+
+	}
+
+	static class GenericWrapper<T> {
+
+		private T value;
+
+		public T getValue() {
+			return this.value;
+		}
+
+		public void setValue(T value) {
+			this.value = value;
+		}
+
 	}
 
 	static class MyPojo {

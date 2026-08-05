@@ -137,8 +137,16 @@ public abstract class AbstractSqsMessageSource<T> extends AbstractPollingMessage
 
 	@Override
 	protected void doConfigurePayloadTypeOnContext(Class<?> payloadType, MessageConversionContext context) {
-		ConfigUtils.INSTANCE.acceptIfInstance(context, SqsMessageConversionContext.class,
-				ctx -> ctx.setPayloadClass(payloadType));
+		doConfigurePayloadTypeOnContext(payloadType, null, context);
+	}
+
+	@Override
+	protected void doConfigurePayloadTypeOnContext(Class<?> payloadType, @Nullable Object conversionHint,
+			MessageConversionContext context) {
+		ConfigUtils.INSTANCE.acceptIfInstance(context, SqsMessageConversionContext.class, ctx -> {
+			ctx.setPayloadClass(payloadType);
+			ctx.setConversionHint(conversionHint);
+		});
 	}
 
 	// @formatter:off
